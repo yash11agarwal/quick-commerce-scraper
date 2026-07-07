@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">Call Recorder</string>
+    <string name="settings">Settings</string>
+    <string name="no_recordings">No recordings yet.\n\nPlace or answer a call and it will be recorded automatically.</string>
+
+    <string name="notif_channel_recording">Call recording</string>
+    <string name="notif_channel_transcription">Transcription</string>
+    <string name="notif_recording_title">Recording call</string>
+    <string name="notif_recording_text">Tap to open Call Recorder</string>
+    <string name="notif_transcribing_title">Transcribing…</string>
+    <string name="notif_transcribed_title">Transcript ready</string>
+
+    <string name="auto_record_calls">Automatically record calls</string>
+    <string name="auto_transcribe">Automatically transcribe after each call</string>
+    <string name="use_speakerphone_hint">Tip: on non-rooted phones only your microphone is captured. Put the call on speakerphone so the other person is recorded too.</string>
+
+    <string name="api_provider">Transcription provider</string>
+    <string name="api_key">API key</string>
+    <string name="api_base_url">API base URL</string>
+    <string name="api_model">Model</string>
+    <string name="language_hint">Language code (optional, e.g. en)</string>
+    <string name="save">Save</string>
+    <string name="saved">Saved</string>
+
+    <string name="play">Play</string>
+    <string name="stop">Stop</string>
+    <string name="transcribe_now">Transcribe now</string>
+    <string name="share">Share</string>
+    <string name="delete">Delete</string>
+    <string name="no_transcript">No transcript yet. Tap “Transcribe now”.</string>
+    <string name="transcribing">Transcribing…</string>
+</resources>
