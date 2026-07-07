@@ -38,6 +38,9 @@ signals** across six Indian quick-commerce platforms:
 
 ## Architecture
 
+The end-to-end flow, as a diagram: **[docs/flowchart.md](docs/flowchart.md)**
+(GitHub renders it inline).
+
 ```
 main.py                      # CLI: one sweep = platforms × pincodes × queries
 config.yaml                  # pincodes, queries, platforms, rate limits, retry
