@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick-Commerce Price Tracker</title>
+<style>
+  :root {
+    --page:        #f9f9f7;
+    --surface-1:   #fcfcfb;
+    --text-primary:#0b0b0b;
+    --text-secondary:#52514e;
+    --muted:       #898781;
+    --grid:        #e1e0d9;
+    --baseline:    #c3c2b7;
+    --border:      rgba(11,11,11,0.10);
+    --status-good: #0ca30c;
+    --status-critical:#d03b3b;
+    --good-text:   #006300;
+    /* categorical slots — fixed per platform, never re-assigned (see PLATFORMS) */
+    --s1:#2a78d6; --s2:#1baf7a; --s3:#eda100; --s4:#008300; --s5:#4a3aa7; --s6:#e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page:#0d0d0d; --surface-1:#1a1a19;
+      --text-primary:#ffffff; --text-secondary:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
+      --status-good:#0ca30c; --status-critical:#d03b3b; --good-text:#0ca30c;
+      --s1:#3987e5; --s2:#199e70; --s3:#c98500; --s4:#008300; --s5:#9085e9; --s6:#e66767;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: var(--text-secondary); margin: 0 0 20px; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+  .filters label { color: var(--text-secondary); font-size: 13px; margin-right: 4px; }
+  select {
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font: inherit;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    background: var(--surface-1); color: var(--text-secondary); border: 0;
+    padding: 7px 12px; font: inherit; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { color: var(--text-primary); font-weight: 600; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .tile .label { color: var(--text-secondary); font-size: 13px; }
+  .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+  .tile .note  { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 18px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .desc { color: var(--text-secondary); font-size: 13px; margin: 0 0 12px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; }
+  .legend .swatch { width: 14px; height: 3px; border-radius: 2px; }
+
+  .chart-box { position: relative; }
+  .chart-box svg { display: block; width: 100%; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; box-shadow: 0 4px 14px rgba(0,0,0,.12); min-width: 150px;
+  }
+  .tooltip .tt-date { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 7px; padding: 1px 0; }
+  .tooltip .tt-key { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+  .tooltip .tt-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tooltip .tt-name { color: var(--text-secondary); font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px;
+       border-bottom: 1px solid var(--grid); padding: 6px 8px; }
+  td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+  tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--s1) 10%, transparent); }
+  .pdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
+  .stock { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .stock.in  { color: var(--good-text); }
+  .stock.out { color: var(--status-critical); }
+  .badge {
+    display: inline-block; font-size: 11px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px; padding: 0 6px; margin-left: 6px;
+  }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Quick-Commerce Price Tracker</h1>
+  <p class="sub">Price &amp; availability history collected by the scraper — <span id="meta-note">loading…</span></p>
+
+  <!-- Filter row: scopes everything below it -->
+  <div class="filters">
+    <label for="f-query">Product</label>
+    <select id="f-query"></select>
+    <label for="f-pincode">Pincode</label>
+    <select id="f-pincode"></select>
+    <span class="seg" id="f-days" role="group" aria-label="Date range">
+      <button data-days="7"  aria-pressed="false">7 days</button>
+      <button data-days="30" aria-pressed="true">30 days</button>
+      <button data-days="90" aria-pressed="false">90 days</button>
+    </span>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Cheapest in-stock price by platform</h2>
+    <p class="desc">Lowest observed price per day for this search, per platform. Gaps mean nothing in stock (or no scrape) that day.</p>
+    <div class="legend" id="legend"></div>
+    <div class="chart-box" id="chart-main"></div>
+  </div>
+
+  <div class="card">
+    <h2>Latest snapshot</h2>
+    <p class="desc">Most recent observation of every matching product. Click a row to see its full history below.</p>
+    <div id="snapshot"></div>
+  </div>
+
+  <div class="card" id="history-card" hidden>
+    <h2 id="history-title">Product history</h2>
+    <p class="desc" id="history-desc"></p>
+    <div class="chart-box" id="chart-history"></div>
+    <p class="hint">Hollow markers are observations where the product was out of stock.</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* Fixed platform → categorical slot mapping. Color follows the entity:
+   filtering never repaints survivors. */
+const PLATFORMS = {
+  blinkit:          { label: "Blinkit",          color: "var(--s1)" },
+  swiggy_instamart: { label: "Swiggy Instamart", color: "var(--s2)" },
+  zepto:            { label: "Zepto",            color: "var(--s3)" },
+  bigbasket_now:    { label: "BigBasket Now",    color: "var(--s4)" },
+  amazon_now:       { label: "Amazon Now",       color: "var(--s5)" },
+  flipkart_minutes: { label: "Flipkart Minutes", color: "var(--s6)" },
+};
+const pmeta = p => PLATFORMS[p] || { label: p, color: "var(--muted)" };
+const rupees = v => v == null ? "—" : "₹" + Number(v).toLocaleString("en-IN",
+                    { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+const state = { query: null, pincode: null, days: 30, selected: null };
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+/* ---------------- boot + filters ---------------- */
+
+async function boot() {
+  const meta = await getJSON("/api/meta");
+  document.getElementById("meta-note").textContent =
+    `${meta.observation_count.toLocaleString()} observations, last scrape ${meta.last_scrape ? new Date(meta.last_scrape).toLocaleString() : "never"}`;
+
+  fillSelect("f-query", meta.queries);
+  fillSelect("f-pincode", meta.pincodes);
+  state.query = meta.queries[0] ?? null;
+  state.pincode = meta.pincodes[0] ?? null;
+
+  document.getElementById("f-query").onchange = e => { state.query = e.target.value; state.selected = null; refresh(); };
+  document.getElementById("f-pincode").onchange = e => { state.pincode = e.target.value; state.selected = null; refresh(); };
+  document.querySelectorAll("#f-days button").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll("#f-days button").forEach(b => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", "true");
+    state.days = Number(btn.dataset.days);
+    refresh();
+  });
+  refresh();
+}
+
+function fillSelect(id, values) {
+  const sel = document.getElementById(id);
+  sel.replaceChildren();
+  for (const v of values) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = v;   // untrusted strings → textContent
+    sel.appendChild(o);
+  }
+}
+
+async function refresh() {
+  if (!state.query || !state.pincode) {
+    document.getElementById("tiles").replaceChildren();
+    showEmpty("chart-main", "No data yet — run the scraper first (python main.py).");
+    showEmpty("snapshot", "No data yet.");
+    return;
+  }
+  const qs = `pincode=${encodeURIComponent(state.pincode)}&query=${encodeURIComponent(state.query)}&days=${state.days}`;
+  const [summary, best] = await Promise.all([
+    getJSON(`/api/summary?${qs}`), getJSON(`/api/best-price?${qs}`),
+  ]);
+  renderTiles(summary);
+  renderMainChart(best);
+  renderSnapshot(summary);
+  document.getElementById("history-card").hidden = state.selected == null;
+  if (state.selected) loadHistory(state.selected);
+}
+
+/* ---------------- stat tiles ---------------- */
+
+function renderTiles(summary) {
+  const inStock = summary.filter(r => r.in_stock);
+  const cheapest = inStock.filter(r => r.price != null)
+                          .sort((a, b) => a.price - b.price)[0];
+  const discounts = summary.map(r => r.discount_pct).filter(v => v != null);
+  const avgDisc = discounts.length
+    ? (discounts.reduce((a, b) => a + b, 0) / discounts.length).toFixed(1) + "%" : "—";
+
+  const tiles = [
+    { label: "Products found", value: String(summary.length),
+      note: "latest snapshot for this search" },
+    { label: "In stock now", value: `${inStock.length} of ${summary.length}`,
+      note: "boolean flags — see granularity per row" },
+    { label: "Cheapest right now", value: cheapest ? rupees(cheapest.price) : "—",
+      note: cheapest ? `${pmeta(cheapest.platform).label} · ${cheapest.product_name}` : "nothing in stock" },
+    { label: "Avg. discount", value: avgDisc, note: "vs printed MRP" },
+  ];
+  const box = document.getElementById("tiles");
+  box.replaceChildren();
+  for (const t of tiles) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    const l = document.createElement("div"); l.className = "label"; l.textContent = t.label;
+    const v = document.createElement("div"); v.className = "value"; v.textContent = t.value;
+    const n = document.createElement("div"); n.className = "note";  n.textContent = t.note;
+    el.append(l, v, n);
+    box.appendChild(el);
+  }
+}
+
+/* ---------------- charts (shared vanilla-SVG engine) ---------------- */
+
+function showEmpty(id, msg) {
+  const box = document.getElementById(id);
+  box.replaceChildren();
+  const d = document.createElement("div");
+  d.className = "empty"; d.textContent = msg;
+  box.appendChild(d);
+}
+
+function niceTicks(min, max, n = 5) {
+  if (min === max) { min = Math.max(0, min - 1); max += 1; }
+  const span = max - min;
+  const step0 = span / n;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= n) || mag * 10;
+  const lo = Math.floor(min / step) * step;
+  const ticks = [];
+  for (let v = lo; v <= max + 1e-9; v += step) if (v >= min - step) ticks.push(v);
+  // top tick must cover the data max, or the highest line renders above the plot
+  while (ticks[ticks.length - 1] < max - 1e-9) ticks.push(ticks[ticks.length - 1] + step);
+  return ticks;
+}
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+/* series: [{ name, color, points: [{x(ms), y, meta}] }] — x positions shared or not */
+function renderLineChart(boxId, series, { yFormat = rupees } = {}) {
+  const box = document.getElementById(boxId);
+  box.replaceChildren();
+  const all = series.flatMap(s => s.points);
+  if (!all.length) { showEmpty(boxId, "No priced, in-stock observations in this range."); return; }
+
+  const W = Math.max(320, box.clientWidth), H = 280;
+  const pad = { l: 52, r: 16, t: 12, b: 28 };
+  const xs = [...new Set(all.map(p => p.x))].sort((a, b) => a - b);
+  const xMin = xs[0], xMax = xs[xs.length - 1] === xMin ? xMin + 1 : xs[xs.length - 1];
+  const yVals = all.map(p => p.y);
+  const yTicks = niceTicks(Math.min(...yVals), Math.max(...yVals));
+  const yMin = yTicks[0], yMax = yTicks[yTicks.length - 1];
+  const X = x => pad.l + (x - xMin) / (xMax - xMin) * (W - pad.l - pad.r);
+  const Y = y => H - pad.b - (y - yMin) / (yMax - yMin || 1) * (H - pad.t - pad.b);
+
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
+
+  for (const t of yTicks) {                       // hairline grid + axis labels
+    svg.appendChild(svgEl("line", { x1: pad.l, x2: W - pad.r, y1: Y(t), y2: Y(t),
+      stroke: "var(--grid)", "stroke-width": 1 }));
+    const lbl = svgEl("text", { x: pad.l - 8, y: Y(t) + 4, "text-anchor": "end",
+      fill: "var(--muted)", "font-size": 11 });
+    lbl.textContent = yFormat(t);
+    svg.appendChild(lbl);
+  }
+  svg.appendChild(svgEl("line", { x1: pad.l, x2: W - pad.r, y1: H - pad.b, y2: H - pad.b,
+    stroke: "var(--baseline)", "stroke-width": 1 }));
+
+  const nXTicks = Math.min(6, xs.length);         // date ticks
+  for (let i = 0; i < nXTicks; i++) {
+    const x = xs[Math.round(i * (xs.length - 1) / Math.max(1, nXTicks - 1))];
+    const lbl = svgEl("text", { x: X(x), y: H - 8, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11 });
+    lbl.textContent = new Date(x).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    svg.appendChild(lbl);
+  }
+
+  for (const s of series) {                       // 2px lines + ringed end-dots
+    const pts = [...s.points].sort((a, b) => a.x - b.x);
+    if (pts.length > 1) {
+      svg.appendChild(svgEl("path", {
+        d: pts.map((p, i) => `${i ? "L" : "M"}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(""),
+        fill: "none", stroke: s.color, "stroke-width": 2,
+        "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    }
+    for (const p of pts) {
+      const isEnd = p === pts[pts.length - 1];
+      if (isEnd || p.meta?.hollow || pts.length === 1) {
+        svg.appendChild(svgEl("circle", { cx: X(p.x), cy: Y(p.y), r: 4,
+          fill: p.meta?.hollow ? "var(--surface-1)" : s.color,
+          stroke: p.meta?.hollow ? s.color : "var(--surface-1)", "stroke-width": 2 }));
+      }
+    }
+  }
+
+  /* crosshair + one tooltip listing every series at the snapped X */
+  const cross = svgEl("line", { y1: pad.t, y2: H - pad.b, stroke: "var(--baseline)",
+    "stroke-width": 1, visibility: "hidden" });
+  svg.appendChild(cross);
+  const hoverDots = series.map(s => {
+    const c = svgEl("circle", { r: 4, fill: s.color, stroke: "var(--surface-1)",
+      "stroke-width": 2, visibility: "hidden" });
+    svg.appendChild(c); return c;
+  });
+
+  const tip = document.createElement("div");
+  tip.className = "tooltip";
+  box.append(svg, tip);
+
+  function onMove(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    const mx = (clientX - rect.left) * (W / rect.width);
+    let best = xs[0];
+    for (const x of xs) if (Math.abs(X(x) - mx) < Math.abs(X(best) - mx)) best = x;
+    cross.setAttribute("x1", X(best)); cross.setAttribute("x2", X(best));
+    cross.setAttribute("visibility", "visible");
+
+    tip.replaceChildren();
+    const d = document.createElement("div");
+    d.className = "tt-date";
+    d.textContent = new Date(best).toLocaleString("en-IN",
+      { day: "numeric", month: "short", ...(xs.length > 40 ? { hour: "2-digit", minute: "2-digit" } : {}) });
+    tip.appendChild(d);
+    series.forEach((s, i) => {
+      const p = s.points.find(pt => pt.x === best);
+      hoverDots[i].setAttribute("visibility", p ? "visible" : "hidden");
+      if (p) { hoverDots[i].setAttribute("cx", X(p.x)); hoverDots[i].setAttribute("cy", Y(p.y)); }
+      const row = document.createElement("div"); row.className = "tt-row";
+      const key = document.createElement("span"); key.className = "tt-key"; key.style.background = s.color;
+      const val = document.createElement("span"); val.className = "tt-val";
+      val.textContent = p ? yFormat(p.y) + (p.meta?.hollow ? " (out of stock)" : "") : "—";
+      const nm = document.createElement("span"); nm.className = "tt-name"; nm.textContent = s.name;
+      row.append(key, val, nm);
+      tip.appendChild(row);
+    });
+    tip.style.display = "block";
+    const bx = box.getBoundingClientRect();
+    const left = clientX - bx.left + 14;
+    tip.style.left = Math.min(left, bx.width - tip.offsetWidth - 4) + "px";
+    tip.style.top = Math.max(0, clientY - bx.top - tip.offsetHeight - 10) + "px";
+  }
+  svg.addEventListener("pointermove", e => onMove(e.clientX, e.clientY));
+  svg.addEventListener("pointerleave", () => {
+    tip.style.display = "none";
+    cross.setAttribute("visibility", "hidden");
+    hoverDots.forEach(c => c.setAttribute("visibility", "hidden"));
+  });
+}
+
+function renderMainChart(rows) {
+  const byPlatform = new Map();
+  for (const r of rows) {
+    if (!byPlatform.has(r.platform)) byPlatform.set(r.platform, []);
+    byPlatform.get(r.platform).push({ x: Date.parse(r.day + "T00:00:00Z"), y: r.best_price });
+  }
+  const series = Object.keys(PLATFORMS)                  // fixed order, never cycled
+    .filter(p => byPlatform.has(p))
+    .map(p => ({ name: pmeta(p).label, color: pmeta(p).color, points: byPlatform.get(p) }));
+
+  const legend = document.getElementById("legend");
+  legend.replaceChildren();
+  for (const s of series) {                              // legend: ≥2 series always
+    const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = s.color;
+    const t = document.createElement("span"); t.textContent = s.name;
+    k.append(sw, t); legend.appendChild(k);
+  }
+  renderLineChart("chart-main", series);
+}
+
+/* ---------------- snapshot table ---------------- */
+
+function renderSnapshot(summary) {
+  const box = document.getElementById("snapshot");
+  if (!summary.length) { showEmpty("snapshot", "No observations for this search/pincode/range."); return; }
+  box.replaceChildren();
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  for (const [h, cls] of [["Platform"], ["Product"], ["Pack"], ["Price", "num"],
+                          ["MRP", "num"], ["Disc.", "num"], ["Stock"], ["Last seen"]]) {
+    const th = document.createElement("th");
+    if (cls) th.className = cls;
+    th.textContent = h; hr.appendChild(th);
+  }
+  thead.appendChild(hr); table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  for (const r of summary) {
+    const tr = document.createElement("tr");
+    tr.tabIndex = 0;
+    if (state.selected && state.selected.platform === r.platform &&
+        state.selected.product_id === r.product_id) tr.setAttribute("aria-selected", "true");
+
+    const tdP = document.createElement("td");
+    const dot = document.createElement("span"); dot.className = "pdot";
+    dot.style.background = pmeta(r.platform).color;
+    tdP.append(dot, document.createTextNode(pmeta(r.platform).label));
+
+    const tdN = document.createElement("td"); tdN.textContent = r.product_name;  // untrusted
+    const tdU = document.createElement("td"); tdU.textContent = r.quantity_unit ?? "—";
+    const tdPr = document.createElement("td"); tdPr.className = "num"; tdPr.textContent = rupees(r.price);
+    const tdM = document.createElement("td"); tdM.className = "num"; tdM.textContent = rupees(r.mrp);
+    const tdD = document.createElement("td"); tdD.className = "num";
+    tdD.textContent = r.discount_pct != null ? r.discount_pct.toFixed(0) + "%" : "—";
+
+    const tdS = document.createElement("td");
+    const st = document.createElement("span");
+    st.className = "stock " + (r.in_stock ? "in" : "out");
+    st.textContent = (r.in_stock ? "● In stock" : "○ Out of stock");   // icon + label, never color alone
+    if (r.in_stock && r.stock_estimate != null)
+      st.textContent = `● ~${r.stock_estimate} left`;
+    tdS.appendChild(st);
+    const b = document.createElement("span"); b.className = "badge";
+    b.title = "How much the platform actually revealed about stock";
+    b.textContent = r.stock_granularity;
+    tdS.appendChild(b);
+
+    const tdT = document.createElement("td");
+    tdT.textContent = new Date(r.timestamp).toLocaleString("en-IN",
+      { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+    tr.append(tdP, tdN, tdU, tdPr, tdM, tdD, tdS, tdT);
+    const select = () => {
+      state.selected = { platform: r.platform, product_id: r.product_id, name: r.product_name };
+      document.querySelectorAll("#snapshot tbody tr").forEach(x => x.removeAttribute("aria-selected"));
+      tr.setAttribute("aria-selected", "true");
+      document.getElementById("history-card").hidden = false;
+      loadHistory(state.selected);
+    };
+    tr.onclick = select;
+    tr.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } };
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  box.appendChild(table);
+}
+
+/* ---------------- per-product history ---------------- */
+
+async function loadHistory(sel) {
+  const qs = `platform=${encodeURIComponent(sel.platform)}&product_id=${encodeURIComponent(sel.product_id)}` +
+             `&pincode=${encodeURIComponent(state.pincode)}&days=${state.days}`;
+  const rows = await getJSON(`/api/product-history?${qs}`);
+  document.getElementById("history-title").textContent = sel.name;
+  document.getElementById("history-desc").textContent =
+    `${pmeta(sel.platform).label} · pincode ${state.pincode} · every observation in range`;
+  const points = rows.filter(r => r.price != null).map(r => ({
+    x: Date.parse(r.timestamp), y: r.price, meta: { hollow: !r.in_stock },
+  }));
+  /* single series → no legend box; the card title names it */
+  renderLineChart("chart-history",
+    [{ name: pmeta(sel.platform).label, color: pmeta(sel.platform).color, points }]);
+  document.getElementById("history-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+boot().catch(err => {
+  document.getElementById("meta-note").textContent = "failed to load: " + err.message;
+});
+</script>
+</body>
+</html>

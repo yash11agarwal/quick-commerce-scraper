@@ -109,6 +109,22 @@ WHERE platform = 'blinkit' AND product_id = '101' AND pincode = '110001'
 ORDER BY timestamp;
 ```
 
+### Dashboard (frontend)
+
+A local web dashboard for browsing the collected data — no extra installs
+needed (Python standard library only):
+
+```bash
+python dashboard.py           # serves data/observations.db and opens the browser
+python dashboard.py --demo    # preview with synthetic data before your first scrape
+```
+
+It opens `http://127.0.0.1:8000` with: filters (product / pincode / 7-30-90
+days), stat tiles, a "cheapest in-stock price by platform" daily chart, a
+latest-snapshot table (with each row's `stock_granularity` badge), and a
+click-through per-product price history chart. The page lives in
+`web/index.html`; the JSON API in `dashboard.py`.
+
 ### Scheduling
 
 ```cron
