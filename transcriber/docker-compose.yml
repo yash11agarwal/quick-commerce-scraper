@@ -1,0 +1,18 @@
+services:
+  transcriber:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      WHISPER_MODEL: small
+      MAX_UPLOAD_MB: 2048
+      # Uncomment to persist transcripts to S3 (uses your local AWS creds):
+      # S3_BUCKET: my-transcripts-bucket
+      # AWS_REGION: us-east-1
+    volumes:
+      - whisper-models:/models   # cache model weights across restarts
+      - transcriber-data:/data
+
+volumes:
+  whisper-models:
+  transcriber-data:
