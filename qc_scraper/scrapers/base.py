@@ -32,6 +32,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -249,6 +250,51 @@ class BaseScraper(ABC):
                 "search_product()/get_inventory(); catalogs are hyperlocal."
             )
         return self.current_pincode
+
+    # ------------------------------------------------------------------ #
+    # Debug capture — for diagnosing adapter breakage without live access
+    # ------------------------------------------------------------------ #
+
+    async def dump_debug(self, label: str, reason: str = "") -> None:
+        """Save a screenshot + recently captured JSON to ./debug/<platform>/.
+
+        Call this whenever a step fails, or succeeds in a way that looks
+        wrong (e.g. zero results). Since these sites actively block
+        non-residential IPs, whoever maintains this code long-term often
+        can't reproduce a breakage live — these artifacts are what lets a
+        precise fix happen from screenshots/payloads alone.
+        """
+        if self.page is None:
+            return
+        debug_dir = Path("debug") / self.PLATFORM
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        safe_label = "".join(c if c.isalnum() or c in "-_" else "_" for c in label)
+        stem = debug_dir / f"{safe_label}_{ts}"
+
+        try:
+            await self.page.screenshot(path=str(stem) + ".png", full_page=True)
+        except Exception:  # noqa: BLE001 - best-effort diagnostics, never fatal
+            pass
+        try:
+            payloads = [
+                {"url": r.url, "status": r.status, "data": r.data}
+                for r in self._responses[-20:]
+            ]
+            (Path(str(stem) + ".json")).write_text(
+                json.dumps(payloads, indent=2, default=str)
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            (Path(str(stem) + ".url.txt")).write_text(self.page.url)
+        except Exception:  # noqa: BLE001
+            pass
+        if reason:
+            log.warning("[%s] debug artifacts saved to %s* (%s)",
+                       self.PLATFORM, stem, reason)
+        else:
+            log.warning("[%s] debug artifacts saved to %s*", self.PLATFORM, stem)
 
     # ------------------------------------------------------------------ #
     # Adapter contract

@@ -74,6 +74,23 @@ class FlipkartMinutesScraper(BaseScraper):
                 timeout=8,
             )
         await self.page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+
+        # This used to unconditionally assume success here regardless of
+        # what the page actually did — exactly how a prior test run logged
+        # "location set" while the pincode was never really accepted and
+        # every subsequent search silently came back empty. Best-effort
+        # verification: the pincode should now be visible somewhere on
+        # the page (delivery banner, header chip, etc). The exact right
+        # selector needs confirming against a live browser (see README
+        # "Flipkart Minutes" section) — this text-anywhere check is a
+        # placeholder that at least turns silent failure into a loud one.
+        delivery_shown = await self.page.locator(f"text={pincode}").count() > 0
+        if not delivery_shown:
+            raise RuntimeError(
+                f"[flipkart_minutes] pincode {pincode} not visible anywhere on "
+                "the page after submitting — location was likely not accepted "
+                "(selectors may be stale)"
+            )
         self.current_pincode = pincode
         log.info("[flipkart_minutes] location set to %s", pincode)
 

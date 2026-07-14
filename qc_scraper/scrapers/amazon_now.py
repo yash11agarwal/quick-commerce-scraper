@@ -80,10 +80,16 @@ class AmazonNowScraper(BaseScraper):
         await self.page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
 
         # Verify the header now shows our pincode; otherwise Amazon silently
-        # kept the old location and all availability data would be wrong.
+        # kept the old location and every subsequent price/stock row would be
+        # silently wrong. This used to only log a warning and continue —
+        # that's exactly how a prior test run ended up quietly scraping the
+        # regular Amazon marketplace instead of the pincode's Now catalog.
         header = await self.page.locator("#glow-ingress-line2").first.text_content()
-        if header and pincode not in header:
-            log.warning("[amazon_now] header shows %r, expected pincode %s", header, pincode)
+        if not header or pincode not in header:
+            raise RuntimeError(
+                f"[amazon_now] location not applied — header shows {header!r}, "
+                f"expected pincode {pincode} (glow modal may have changed)"
+            )
         self.current_pincode = pincode
         log.info("[amazon_now] location set to %s", pincode)
 
@@ -94,6 +100,28 @@ class AmazonNowScraper(BaseScraper):
         await self.page.wait_for_selector(
             '[data-component-type="s-search-result"]', timeout=self.timeout_ms
         )
+
+        # KNOWN-UNVERIFIED: NOW_SEARCH_PARAMS ("i=nowstore") was a guess at
+        # the quick-commerce storefront filter and has been observed to
+        # silently fall through to the regular Amazon marketplace instead —
+        # i.e. this whole adapter may currently be scraping the wrong
+        # catalog without any error. Rather than trust the URL param, look
+        # for an on-page signal that this is actually the fast-delivery
+        # storefront; if it's not there, fail loudly instead of returning
+        # mislabeled data. The exact selector/text below needs confirming
+        # against a live browser (see README "Amazon Now" section) — this
+        # is a best-effort placeholder, not a confirmed fix.
+        is_now_storefront = await self.page.locator(
+            'text=/now|15[- ]min|fast delivery/i'
+        ).count() > 0
+        if not is_now_storefront:
+            raise RuntimeError(
+                "[amazon_now] search results don't show any Now/15-min "
+                "storefront signal — likely landed on the regular Amazon "
+                "marketplace instead; NOW_SEARCH_PARAMS needs re-verifying "
+                "against the live site"
+            )
+
         records = await self._extract_search_results_from_dom(pincode, query)
         out = records[: self.config.max_results_per_search]
         log.info("[amazon_now] %r @ %s -> %d products", query, pincode, len(out))

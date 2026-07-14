@@ -15,6 +15,15 @@ Payload quirks:
 Location model: store ("storeId") is resolved from the chosen address;
 we set it through the real location picker UI so all cookies/headers are
 consistent.
+
+KNOWN ISSUE (as of the first live test pass): location succeeds, but no
+response ever matches the ``api.zeptonow.com/api/v\\d+/search`` pattern
+within the timeout — the real search endpoint has likely moved (different
+path, version, or even a different subdomain). API_URL_PATTERNS below has
+been broadened to also capture any ``.../api/`` traffic on zeptonow.com so
+the next failed run's ./debug/zepto/*.json dump shows every API call the
+page actually made — that list is what a real fix should be based on,
+rather than another guess.
 """
 
 from __future__ import annotations
@@ -39,6 +48,10 @@ class ZeptoScraper(BaseScraper):
         r"api\.zeptonow\.com/api/v\d+/search",
         r"api\.zeptonow\.com/api/v\d+.*product",
         r"api\.zeptonow\.com/api/v\d+/inventory",
+        # Diagnostic fallback (broad on purpose): captures ANY zeptonow.com
+        # API call so a failed run's debug dump shows what the real search
+        # endpoint is actually named now, instead of an empty dump.
+        r"zeptonow\.com/api/",
     ]
 
     async def set_location(self, pincode: str) -> None:

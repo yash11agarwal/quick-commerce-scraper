@@ -13,6 +13,18 @@ so we drive the real UI.
 Inventory granularity: item variations carry an ``inventory`` object which
 usually only holds ``in_stock`` booleans; occasionally a small capped count
 appears — recorded as ESTIMATE when present.
+
+KNOWN ISSUE (as of the first live test pass): set_location() fails with
+"location input not found" on both tested pincodes, and the tester observed
+what looked like a "request blocked" page rather than the normal site. That
+combination points at bot-detection kicking in before our selectors ever get
+a chance to run — this is likely NOT a simple stale-selector fix, and may
+need a residential proxy (see config.yaml `browser.proxy`) and/or slower,
+more human-like interaction timing rather than a code change here. Next
+diagnostic step: re-run with this platform only (`--platform
+swiggy_instamart --headed -v`) and check ./debug/swiggy_instamart/ for the
+screenshot captured at the failure point — if it shows a CAPTCHA or "unusual
+traffic" page, that confirms bot-detection over a UI change.
 """
 
 from __future__ import annotations

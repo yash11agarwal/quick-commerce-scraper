@@ -12,6 +12,29 @@ signals** across six Indian quick-commerce platforms:
 | Amazon Now | `amazon_now.py` | hybrid: `/s/query` interception + DOM `data-*` fallback (see below) | **boolean**; "Only N left" strings → estimate |
 | Flipkart Minutes | `flipkart_minutes.py` | intercepted internal JSON (`rome.api.flipkart.com .../page/fetch`) | **boolean** intents; "only N left" labels → estimate |
 
+## Current status (last live test pass)
+
+This project reverse-engineers six actively-hostile-to-bots websites, so
+"works" is a moving target. Here's the honest state as of the most recent
+end-to-end test run against the real sites from a residential IP:
+
+| Platform | Status | Notes |
+|---|---|---|
+| Blinkit | ✅ Working | Location + search both succeed; location step is a bit slow (~30s). |
+| BigBasket Now | ✅ Working | Same as above; location step took ~100s in testing. |
+| Swiggy Instamart | ❌ Blocked | Site returned what looked like a bot-detection/"request blocked" page before our selectors even got a chance. Likely needs a residential proxy, not a selector fix — see `swiggy_instamart.py`'s docstring. |
+| Zepto | ❌ Broken | Location succeeds, but the search API endpoint we listen for never fires — it's likely moved. See `zepto.py`'s docstring; `API_URL_PATTERNS` has been broadened to capture diagnostic evidence on the next failed run. |
+| Amazon Now | ❌ Broken | Was silently landing on the *regular* Amazon marketplace instead of the 15-minute storefront — this is now a loud, caught failure instead of silently-wrong data (see `amazon_now.py`). The real "Now" entry point still needs re-discovering live. |
+| Flipkart Minutes | ❌ Broken | Was reporting "location set" successfully while the pincode was never actually accepted, so every search silently came back with 0 products. Now verified and will fail loudly instead. |
+
+**Also found:** keyword search can grab the wrong SKU/pack-size for a query
+(whatever the parser sees as the first/best match) — see "Exact-SKU
+tracking" below for the fix.
+
+Since these sites actively block non-residential traffic, whoever maintains
+this next likely can't reproduce a live failure from wherever they're
+working. That's what the debug-capture feature (below) is for.
+
 ## ⚠️ Read this first
 
 - **No official APIs.** Every adapter drives the real website with Playwright
@@ -42,22 +65,29 @@ The end-to-end flow, as a diagram: **[docs/flowchart.md](docs/flowchart.md)**
 (GitHub renders it inline).
 
 ```
-main.py                      # CLI: one sweep = platforms × pincodes × queries
+main.py                      # CLI: one sweep = platforms × pincodes × queries (keyword search)
+track_products.py            # CLI: one sweep over targets.xlsx (exact product URLs)
+dashboard.py                 # local web dashboard (stdlib HTTP server + JSON API)
 config.yaml                  # pincodes, queries, platforms, rate limits, retry
+targets.xlsx                 # exact-SKU watchlist: Pincodes + Products sheets
 qc_scraper/
   schema.py                  # ProductRecord + StockGranularity (normalized output)
   config.py                  # YAML → typed config
   storage.py                 # SQLite append-only time series
+  targets.py                 # targets.xlsx loader + per-platform URL → product_id
   utils/
     rate_limiter.py          # per-domain min-delay + jitter (shared per run)
     retry.py                 # exponential backoff (2s/4s/8s…)
     user_agents.py           # UA rotation (one per browser session)
   scrapers/
     base.py                  # BaseScraper ABC: Playwright lifecycle +
-                             #   network-response interception + goto/retry
+                             #   network-response interception + goto/retry +
+                             #   dump_debug() failure-diagnostics capture
     parsing.py               # defensive recursive JSON hunting, label parsing
     blinkit.py … flipkart_minutes.py   # one adapter per platform
-tests/                       # parser fixtures (canaries) + storage roundtrip
+web/index.html                # dashboard frontend (self-contained, no build step)
+scripts/build_targets_template.py   # regenerates targets.xlsx if deleted
+tests/                       # parser fixtures (canaries) + storage/targets roundtrip
 ```
 
 **Why interception instead of HTML parsing:** all six sites are JS-rendered
@@ -91,6 +121,14 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
+
+**Windows prerequisite:** Playwright's dependencies (`greenlet`) are
+compiled C extensions and need the **Microsoft Visual C++ Redistributable**
+to load. If `python main.py` fails with `ImportError: DLL load failed while
+importing _greenlet`, install it from
+https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again —
+this isn't a bug in the code, most fresh Windows installs simply don't have
+it yet.
 
 ## Usage
 
@@ -127,6 +165,53 @@ days), stat tiles, a "cheapest in-stock price by platform" daily chart, a
 latest-snapshot table (with each row's `stock_granularity` badge), and a
 click-through per-product price history chart. The page lives in
 `web/index.html`; the JSON API in `dashboard.py`.
+
+### Debugging a broken platform
+
+Every `set_location()` failure, `search_product()` failure, and every
+search that comes back with **zero results** (which is often a silent
+failure rather than a raised error — the page just didn't do what the code
+assumed) automatically saves a screenshot + the raw JSON the page loaded
+into `./debug/<platform>/`:
+
+```
+debug/
+  flipkart_minutes/
+    location_110001_FAILED_20260715-013045.png
+    location_110001_FAILED_20260715-013045.json
+    location_110001_FAILED_20260715-013045.url.txt
+```
+
+This exists because these sites block non-residential IPs, so whoever is
+fixing an adapter often can't reproduce the failure live themselves — the
+screenshot shows exactly what the browser saw, and the `.json` file shows
+every matching API response captured up to that point. Hand these three
+files over instead of re-describing what happened in words.
+
+### Exact-SKU tracking (targets.xlsx)
+
+Keyword search (`config.yaml`'s `queries`) asks each platform's own search
+ranking to pick a result — which can silently grab the wrong pack size or
+a different brand than you meant. For a fixed watchlist of specific
+products, **`targets.xlsx`** lets you paste the exact product page URL
+instead, so there's no guessing:
+
+```bash
+python track_products.py --headed -v
+```
+
+Open `targets.xlsx` (an Instructions tab explains the process): list your
+pincodes on the **Pincodes** tab, and on the **Products** tab, for each
+product/platform combination, paste the URL of that product's own page
+(open the product on the real site, copy the address bar) plus a `label`
+you choose — use the *same* label for the same product across different
+platforms so the dashboard groups and compares them together, exactly like
+it does for keyword-search queries. Results append to the same
+`data/observations.db`, so `python dashboard.py` shows both keyword-search
+and exact-SKU rows.
+
+If `targets.xlsx` ever gets deleted, regenerate it with
+`python scripts/build_targets_template.py`.
 
 ### Scheduling
 

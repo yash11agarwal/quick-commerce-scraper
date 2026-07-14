@@ -1,5 +1,6 @@
 playwright>=1.44
 PyYAML>=6.0
+openpyxl>=3.1
 
 # Dev / test
 pytest>=8.0

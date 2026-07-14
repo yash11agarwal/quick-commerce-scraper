@@ -41,6 +41,7 @@ async def run_platform(
             except Exception as exc:  # noqa: BLE001
                 log.error("[%s] set_location(%s) failed: %s — skipping pincode",
                           scraper.PLATFORM, pincode, exc)
+                await scraper.dump_debug(f"location_{pincode}_FAILED", str(exc))
                 continue
             for query in config.queries:
                 try:
@@ -48,7 +49,15 @@ async def run_platform(
                 except Exception as exc:  # noqa: BLE001
                     log.error("[%s] search %r @ %s failed: %s",
                               scraper.PLATFORM, query, pincode, exc)
+                    await scraper.dump_debug(f"search_{pincode}_{query}_FAILED", str(exc))
                     continue
+                if not records:
+                    # Zero results usually means the page never actually
+                    # reached the state the code assumed (silent failure
+                    # rather than a raised exception) — worth the same
+                    # diagnostic capture as a hard error.
+                    await scraper.dump_debug(
+                        f"search_{pincode}_{query}_EMPTY", "search returned 0 products")
                 total += store.insert_many(records)
     return total
 
@@ -99,6 +108,8 @@ def main() -> None:
     if not config.pincodes or not config.queries:
         raise SystemExit("config needs at least one pincode and one query")
 
+    log.info("Any failures or empty-result searches save a screenshot + "
+             "captured data under ./debug/<platform>/ for troubleshooting.")
     asyncio.run(run_sweep(config, args.platforms))
 
 

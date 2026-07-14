@@ -8,3 +8,4 @@ data/*.db-shm
 data/*.csv
 .pytest_cache/
 *.log
+debug/
