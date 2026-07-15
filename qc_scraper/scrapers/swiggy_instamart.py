@@ -14,17 +14,24 @@ Inventory granularity: item variations carry an ``inventory`` object which
 usually only holds ``in_stock`` booleans; occasionally a small capped count
 appears — recorded as ESTIMATE when present.
 
-KNOWN ISSUE (as of the first live test pass): set_location() fails with
-"location input not found" on both tested pincodes, and the tester observed
-what looked like a "request blocked" page rather than the normal site. That
-combination points at bot-detection kicking in before our selectors ever get
-a chance to run — this is likely NOT a simple stale-selector fix, and may
-need a residential proxy (see config.yaml `browser.proxy`) and/or slower,
-more human-like interaction timing rather than a code change here. Next
-diagnostic step: re-run with this platform only (`--platform
-swiggy_instamart --headed -v`) and check ./debug/swiggy_instamart/ for the
-screenshot captured at the failure point — if it shows a CAPTCHA or "unusual
-traffic" page, that confirms bot-detection over a UI change.
+KNOWN ISSUE — CONFIRMED BOT-DETECTION, NOT A SELECTOR BUG (2nd live test pass):
+a screenshot of the actual failure now confirms swiggy.com/instamart serves
+an explicit "Request Blocked — Your request looks automated and has been
+blocked" interstitial (an edge/WAF-level bot check, not a broken CSS
+selector) before our code ever gets a chance to find the location input.
+No amount of selector fixing addresses this — the page shown to the browser
+genuinely isn't the site. Realistic paths forward, roughly in order of
+effort:
+  1. Route this platform's traffic through a residential/mobile proxy
+     (`browser.proxy` in config.yaml) — datacenter and most VPN egress IPs
+     are the trigger for this kind of block.
+  2. Slow down further and look more "human" (larger randomized delays,
+     mouse movement before typing) — a partial mitigation at best against
+     a dedicated bot-detection vendor, not a fix.
+  3. Accept Swiggy Instamart may not be scrapable from this network/setup
+     and drop it from `platforms:` in config.yaml.
+This is documented here rather than "fixed" because there is no code change
+on our end that gets past a server-side block.
 """
 
 from __future__ import annotations

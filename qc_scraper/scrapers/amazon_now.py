@@ -81,14 +81,21 @@ class AmazonNowScraper(BaseScraper):
 
         # Verify the header now shows our pincode; otherwise Amazon silently
         # kept the old location and every subsequent price/stock row would be
-        # silently wrong. This used to only log a warning and continue —
-        # that's exactly how a prior test run ended up quietly scraping the
-        # regular Amazon marketplace instead of the pincode's Now catalog.
-        header = await self.page.locator("#glow-ingress-line2").first.text_content()
+        # silently wrong. A live test run showed the header DID update to the
+        # right pincode (confirmed by screenshot) but a few seconds AFTER
+        # this check ran once and failed — Amazon's client-side re-render
+        # lags slightly behind "networkidle". Poll for a few seconds instead
+        # of checking exactly once.
+        header = None
+        for _ in range(6):  # ~6s of polling, 1s apart
+            header = await self.page.locator("#glow-ingress-line2").first.text_content()
+            if header and pincode in header:
+                break
+            await self.page.wait_for_timeout(1000)
         if not header or pincode not in header:
             raise RuntimeError(
-                f"[amazon_now] location not applied — header shows {header!r}, "
-                f"expected pincode {pincode} (glow modal may have changed)"
+                f"[amazon_now] location not applied after polling — header shows "
+                f"{header!r}, expected pincode {pincode} (glow modal may have changed)"
             )
         self.current_pincode = pincode
         log.info("[amazon_now] location set to %s", pincode)

@@ -39,21 +39,37 @@ class BigBasketNowScraper(BaseScraper):
     async def set_location(self, pincode: str) -> None:
         await self.goto(self.BASE_URL)
 
-        # Header location picker ("Select Location" / current city chip).
-        await self.click_first_available(
+        # Header location picker ("Select Location" / current city chip). This
+        # click MUST succeed before we touch any input box: a live test run
+        # showed that when this click silently failed, the code fell through
+        # to the generic `input[type="text"]` fallback below and typed the
+        # pincode into the main product-search bar instead of the location
+        # box (BigBasket's search bar happily accepts free text, so nothing
+        # errored — it just silently searched for "700048" as a product).
+        opened = await self.click_first_available(
             [
+                'text="Select Location"',
                 'button:has-text("Select Location")',
                 '[data-testid="delivery-location"]',
                 'div[class*="DeliveryLocation"]',
-                'span:has-text("Bangalore")',  # default city chip on first visit
+                'div:has-text("Delivery in") >> nth=0',
             ],
         )
+        if not opened:
+            raise RuntimeError(
+                "[bigbasket_now] could not open the location picker — "
+                "UI likely changed (see README maintenance checklist)"
+            )
+
+        # No generic `input[type="text"]` fallback here on purpose — that was
+        # the bug. If none of these specific selectors match, we want a loud
+        # failure, not a silent mis-fill into the wrong box.
         filled = await self.fill_first_available(
             [
                 'input[placeholder*="pincode" i]',
                 'input[placeholder*="location" i]',
                 'input[placeholder*="Search for area" i]',
-                'input[type="text"]',
+                'input[placeholder*="Search delivery" i]',
             ],
             pincode,
         )
