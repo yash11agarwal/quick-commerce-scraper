@@ -15,6 +15,17 @@ The "Amazon Now" (15-minute delivery) storefront is a filtered view of the
 main catalog; its store alias/param has changed during rollout and may need
 updating in ``NOW_SEARCH_PARAMS`` below.
 
+KNOWN ISSUE (confirmed by two live-test screenshot sets): the browser lands
+on the REGULAR amazon.in marketplace with zero Now/15-min branding and no
+quick-commerce API traffic. Amazon Now appears to be primarily an
+app-first storefront (select cities only) that may simply not be reachable
+from the desktop website via any URL parameter — in which case this adapter
+can at best report regular-marketplace prices, which is NOT quick-commerce
+data. The storefront-signal check in search_product() fails loudly rather
+than mislabeling marketplace prices as "Amazon Now" data. If a working web
+entry point for Amazon Now exists, capture its URL from a real browser
+session (devtools) and update BASE/search URLs accordingly.
+
 Inventory granularity: Amazon exposes booleans plus occasional "Only N left
 in stock" strings on PDPs — never counts. Recorded as ESTIMATE when the
 string is present, else BOOLEAN.
@@ -57,6 +68,16 @@ class AmazonNowScraper(BaseScraper):
         )
         if not opened:
             raise RuntimeError("[amazon_now] glow location widget not found — UI likely changed")
+
+        # When Amazon has ALREADY auto-detected a location (it geolocates by
+        # IP on first visit — a live test showed "Delivering to Noida 110001"
+        # pre-set before we typed anything), the glow modal hides the pincode
+        # input behind a "Change" link. Click it if present; harmless if not.
+        await self.click_first_available(
+            ["#GLUXChangePostalCodeLink", 'a:has-text("Change")',
+             'span:has-text("Change")'],
+            timeout=4,
+        )
 
         filled = await self.fill_first_available(
             ["#GLUXZipUpdateInput", 'input[aria-label*="pin code" i]'],
