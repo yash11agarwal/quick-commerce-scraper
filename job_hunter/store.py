@@ -207,6 +207,13 @@ class JobStore:
         counts = {r["status"]: r["n"] for r in rows}
         return {s: counts[s] for s in JobStatus.values() if s in counts}
 
+    def stats_by_search(self) -> dict[str, int]:
+        """search_name -> count, most productive search first."""
+        rows = self._conn.execute(
+            "SELECT COALESCE(search_name, '(unknown)') AS s, COUNT(*) AS n "
+            "FROM jobs GROUP BY s ORDER BY n DESC").fetchall()
+        return {r["s"]: r["n"] for r in rows}
+
     def export_csv(self, out_path: str | Path) -> int:
         """Dump every tracked job to CSV; returns row count."""
         rows = self.list_jobs(statuses=[])  # all statuses

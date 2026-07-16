@@ -129,18 +129,24 @@ class JobHunterConfig:
     request_timeout_seconds: float = 30.0
 
 
-def load_config(path: str | Path = "job_config.yaml") -> JobHunterConfig:
+def validate_searches(searches: list[SearchSpec], source: str) -> None:
+    """Shared sanity checks; fail fast at load time instead of mid-run."""
+    if not searches:
+        raise ValueError(f"{source}: config needs at least one search")
+    names = [s.name for s in searches]
+    if len(names) != len(set(names)):
+        raise ValueError(f"{source}: search names must be unique, got {names}")
+    for s in searches:
+        s.query_params()  # raises on bad filter values
+
+
+def load_config(path: str | Path) -> JobHunterConfig:
+    """YAML loader (legacy). The Excel workbook is the primary interface —
+    see workbook.load_config — but a .yaml config keeps working."""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
 
     searches = [SearchSpec(**s) for s in raw.get("searches", [])]
-    if not searches:
-        raise ValueError(f"{path}: config needs at least one entry under 'searches'")
-    names = [s.name for s in searches]
-    if len(names) != len(set(names)):
-        raise ValueError(f"{path}: search names must be unique, got {names}")
-    # Fail fast on bad filter values instead of mid-run.
-    for s in searches:
-        s.query_params()
+    validate_searches(searches, str(path))
 
     return JobHunterConfig(
         searches=searches,

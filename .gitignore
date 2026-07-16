@@ -7,6 +7,9 @@ data/*.db-wal
 data/*.db-shm
 data/*.csv
 jobs_export.csv
+jobs_export.xlsx
+# personal job-hunt data (generate with `python jobs.py init`)
+job_tracker.xlsx
 .pytest_cache/
 *.log
 debug/

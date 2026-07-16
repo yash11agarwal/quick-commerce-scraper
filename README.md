@@ -234,15 +234,17 @@ adapter's `API_URL_PATTERNS` / parser → update the fixture.
 ## Bonus tool: LinkedIn job hunter & tracker (`jobs.py`)
 
 This repo also ships a second, independent tool that reuses the same
-patterns (YAML config → polite scraping → SQLite → CLI) for job hunting:
-it pulls public LinkedIn postings for your saved searches, scores them
-against your keywords, and tracks each application through a pipeline
+patterns for job hunting — with **Excel as the whole interface**
+(like `targets.xlsx`, but for both input and output): it pulls public
+LinkedIn postings for your saved searches, scores them against your
+keywords, and tracks each application through a pipeline
 (`new → interested → applied → interviewing → offer/rejected`).
 
 ```bash
-python jobs.py hunt      # pull & rank new postings (config: job_config.yaml)
-python jobs.py list      # review the pipeline
-python jobs.py status 4012345678 applied --note "referred by Priya"
+python jobs.py init      # creates job_tracker.xlsx — configure searches there
+python jobs.py hunt      # pulls & ranks postings into the Jobs sheet
+# ...work the pipeline in Excel (Status dropdown / Add Note column)...
+python jobs.py sync      # absorbs your Excel edits, refreshes the sheets
 ```
 
 Full docs: [docs/job_hunter.md](docs/job_hunter.md).

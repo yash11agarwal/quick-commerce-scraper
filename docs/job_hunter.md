@@ -3,66 +3,87 @@
 Automates the tedious half of a job hunt: every run pulls fresh public
 LinkedIn postings for your saved searches, filters out the noise, scores
 what's left against your keywords, and tracks each job through your
-application pipeline in SQLite. You review a short ranked list instead of
-scrolling LinkedIn.
+application pipeline. **Everything goes in and out through one Excel
+workbook** — `job_tracker.xlsx` — so the daily workflow is: run a command,
+open Excel, work your pipeline there.
 
 ```
-┌─────────────┐   guest search    ┌────────┐  filters &  ┌──────────┐
-│ jobs.py hunt│ ────────────────▶ │ parser │ ──────────▶ │ SQLite   │
-└─────────────┘   (no login)      └────────┘   scoring   │ data/    │
-                                                         │ jobs.db  │
-   list / show / status / note / stats / export ◀─────── └──────────┘
+        job_tracker.xlsx                                    SQLite
+┌─────────────────────────────┐                        ┌─────────────┐
+│ INPUT   Searches            │──── jobs.py hunt ─────▶│ data/jobs.db│
+│         Filters / Scoring   │   (guest search, no    │ statuses,   │
+│         Settings            │    login, throttled)   │ notes,      │
+│                             │                        │ history     │
+│ OUTPUT  Jobs  ◀─────────────│◀── sheets rebuilt ─────│             │
+│         (Status dropdown +  │                        │             │
+│          Add Note editable) │──── edits absorbed ───▶│             │
+│         Stats               │    on every hunt/sync  └─────────────┘
+└─────────────────────────────┘
 ```
 
 ## Quick start
 
 ```bash
-pip install -r requirements.txt        # adds requests + beautifulsoup4
-# 1. Edit job_config.yaml: your searches, filters, score keywords
-# 2. Hunt:
-python jobs.py hunt
-# 3. Review and work the pipeline:
-python jobs.py list
-python jobs.py show 4012345678 --fetch     # pulls the full description
-python jobs.py status 4012 applied --note "referred by Priya"
-python jobs.py stats
+pip install -r requirements.txt
+python jobs.py init        # creates job_tracker.xlsx
+# open it in Excel, fill in the Searches / Filters / Scoring sheets
+python jobs.py hunt        # pulls postings into the Jobs sheet
 ```
 
-Run `hunt` on a schedule the same way `main.py` is scheduled, e.g.:
+Then live in Excel:
+
+- **Jobs sheet** — one row per posting, best matches on top, rows from the
+  latest hunt highlighted yellow. Two columns are editable:
+  - **Status**: a dropdown (`new / interested / applied / interviewing /
+    offer / rejected / archived`)
+  - **Add Note**: type anything ("recruiter: Priya", "phone screen Fri");
+    it's stored as a timestamped note on the next run and the cell clears
+- **Stats sheet** — funnel counts per status and per search.
+
+Any `hunt` or `sync` first absorbs your Excel edits into SQLite (statuses
+recorded with full history), then rebuilds the output sheets. **Save and
+close the workbook before running** — Excel locks the file.
+
+Run `hunt` on a schedule the same way `main.py` is scheduled:
 
 ```cron
 0 9,18 * * *  cd /path/to/quick-commerce-scraper && .venv/bin/python jobs.py hunt
 ```
 
-Only *new* postings are reported each run — everything already tracked is
-just refreshed (`last_seen`), and your statuses/notes are never touched.
+Only *new* postings are added each run — everything already tracked just
+gets its `last_seen` refreshed; your statuses and notes are never touched.
+
+## Workbook sheets
+
+| Sheet | Direction | What goes in it |
+|---|---|---|
+| `ReadMe` | — | cheat sheet with allowed values |
+| `Searches` | input | one row per saved search: keywords, location, posted-within (`day/week/month`), experience levels, workplace (`remote/hybrid/onsite`), job types, max pages |
+| `Filters` | input | columns of drop rules: title-must-contain-any, title-exclude, company-exclude |
+| `Scoring` | input | `keyword → points`, summed over the title; only affects ranking |
+| `Settings` | input | request delays, retries, database path |
+| `Jobs` | output + edits | the pipeline; only `Status` and `Add Note` are read back — everything else is rebuilt from the database |
+| `Stats` | output | funnel counts |
+
+Multi-value cells (experience levels, workplace, job types) take
+comma-separated values, e.g. `entry, associate`. Input sheets are never
+rewritten by the tool; the two output sheets are regenerated every run, so
+don't reorder their columns or park your own data there.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `hunt [--search NAME]` | Run all (or one) configured searches; store & print new jobs, best score first |
-| `list [--status s]... [--all] [--company x] [--search n]` | Show the pipeline; hides `rejected`/`archived` unless asked |
-| `show <id> [--fetch]` | Everything about one job; `--fetch` downloads & caches the description |
-| `status <id> <status> [--note ...]` | Move a job: `new → interested → applied → interviewing → offer` (or `rejected`/`archived`) |
-| `note <id> <text>` | Append a timestamped note (recruiter names, interview dates…) |
-| `stats` | Funnel counts per status |
-| `export [--out f.csv]` | Full CSV dump (spreadsheet-friendly) |
+| `init [--force]` | Create a fresh `job_tracker.xlsx` (also happens automatically on first run) |
+| `hunt [--search NAME]` | Absorb Excel edits → run all (or one) searches → rebuild sheets |
+| `sync` | Absorb Excel edits & rebuild sheets without hunting |
+| `list / show / status / note / stats` | Terminal shortcuts for the same pipeline (`show <id> --fetch` pulls the full job description) |
+| `export [--out f.xlsx\|f.csv]` | Standalone snapshot workbook (or CSV) |
 
 Job ids accept any unique prefix — `jobs.py status 4012 applied` works if
-only one tracked id starts with `4012`. Every status change is recorded in
-a `status_history` table, so `show` displays the full timeline.
-
-## Configuration (`job_config.yaml`)
-
-- **searches** — each has `keywords`, `location`, and optional LinkedIn
-  filters (`posted_within: day|week|month`, `experience_levels`,
-  `workplace: [remote|hybrid|onsite]`, `job_types`, `max_pages`).
-- **filters** — hard drops applied before storing: `title_exclude`,
-  `company_exclude`, and optional `title_include_any` allowlist.
-- **score_keywords** — `keyword: points` summed over the title; only
-  affects ranking so your best matches sort to the top.
-- **rate_limit / retry** — politeness controls (see below).
+only one tracked id starts with `4012`. Every status change (from Excel or
+the CLI) is recorded in a `status_history` table; `show` prints the
+timeline.
 
 ## How it fetches (and what it deliberately doesn't do)
 
@@ -77,11 +98,11 @@ Deliberately **not** included:
   and regularly gets accounts restricted — the last thing you need
   mid-job-hunt. This tool finds and tracks; *you* apply.
 - **No aggressive crawling.** Anonymous traffic is throttled hard
-  (HTTP 429/999). The client waits `rate_limit.min_delay_seconds` (+jitter)
-  between every request and backs off exponentially on throttles. If hunts
-  start failing with "gave up after N attempts": raise the delays, lower
-  `max_pages`, and hunt less often. A scheduled run twice a day with 2–4
-  pages per search is plenty and stays well under the radar.
+  (HTTP 429/999). The client waits `min_delay_seconds` (+jitter) between
+  requests and backs off exponentially on throttles. If hunts fail with
+  "gave up after N attempts": raise the delays in `Settings`, lower
+  `Max Pages`, and hunt less often. Twice a day with 2–4 pages per search
+  is plenty.
 
 Like the price scrapers, the guest markup is unofficial and can change;
 `tests/test_job_parser.py` pins the selectors and acts as the canary.
@@ -90,13 +111,15 @@ Like the price scrapers, the guest markup is unofficial and can change;
 
 ```
 jobs.py                  CLI entry point
-job_config.yaml          your searches / filters / scoring
+job_tracker.xlsx         YOUR workbook (gitignored; `jobs.py init` creates it)
 job_hunter/
-  config.py              YAML → typed config; LinkedIn filter-code mapping
+  workbook.py            Excel in/out: template, config load, edit absorption,
+                         Jobs/Stats sheet rebuild, snapshot export
+  config.py              typed config + LinkedIn filter-code mapping
   scraper.py             polite guest-endpoint HTTP client (throttle-aware)
   parser.py              HTML → JobRecord (search cards + description pages)
   filters.py             include/exclude rules + keyword scoring
-  store.py               SQLite: jobs table + status_history, CSV export
+  store.py               SQLite: jobs table + status_history
   cli.py                 subcommands
-tests/test_job_*.py      parser / store / filters / config tests
+tests/test_job_*.py      workbook / parser / store / filters / config tests
 ```
