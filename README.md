@@ -231,6 +231,22 @@ responses. When an adapter starts returning nothing, the fix loop is: open
 the site in devtools → find the new endpoint/payload shape → update the
 adapter's `API_URL_PATTERNS` / parser → update the fixture.
 
+## Bonus tool: LinkedIn job hunter & tracker (`jobs.py`)
+
+This repo also ships a second, independent tool that reuses the same
+patterns (YAML config → polite scraping → SQLite → CLI) for job hunting:
+it pulls public LinkedIn postings for your saved searches, scores them
+against your keywords, and tracks each application through a pipeline
+(`new → interested → applied → interviewing → offer/rejected`).
+
+```bash
+python jobs.py hunt      # pull & rank new postings (config: job_config.yaml)
+python jobs.py list      # review the pipeline
+python jobs.py status 4012345678 applied --note "referred by Priya"
+```
+
+Full docs: [docs/job_hunter.md](docs/job_hunter.md).
+
 ## Maintenance checklist (when an adapter breaks)
 
 1. Run `python main.py --platform <name> --headed -v` and watch the browser.

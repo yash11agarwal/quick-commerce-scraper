@@ -2,6 +2,10 @@ playwright>=1.44
 PyYAML>=6.0
 openpyxl>=3.1
 
+# job_hunter (LinkedIn job tracker)
+requests>=2.31
+beautifulsoup4>=4.12
+
 # Dev / test
 pytest>=8.0
 pytest-asyncio>=0.23
