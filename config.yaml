@@ -20,7 +20,11 @@ queries:
 # Enable/disable individual platform adapters.
 platforms:
   blinkit: true
-  swiggy_instamart: true
+  # Swiggy serves an explicit "Request Blocked — your request looks
+  # automated" page (WAF bot-detection confirmed by live-test screenshot).
+  # No selector fix helps; needs a residential proxy (browser.proxy) at
+  # minimum. Disabled by default so runs don't waste ~2 min on it.
+  swiggy_instamart: false
   zepto: true
   bigbasket_now: true
   amazon_now: true

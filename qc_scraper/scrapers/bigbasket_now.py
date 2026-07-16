@@ -76,19 +76,36 @@ class BigBasketNowScraper(BaseScraper):
         if not filled:
             raise RuntimeError("[bigbasket_now] location input not found — UI likely changed")
 
+        # Pick the first suggestion. Same rule as blinkit.py: NEVER use a
+        # `has-text("<pincode>")` fallback here — it matches the container
+        # of the box the pincode was just typed into, "succeeds" without
+        # selecting anything, and the run silently proceeds on the wrong
+        # (default) store location.
         picked = await self.click_first_available(
             [
                 'ul[class*="suggestion" i] li',
                 '[data-testid="location-suggestion"] >> nth=0',
-                f'li:has-text("{pincode}") >> nth=0',
-                f'div:has-text("{pincode}") >> nth=0',
+                'div[class*="LocationModal" i] li',
             ],
             timeout=8,
         )
         if not picked:
-            raise RuntimeError(f"[bigbasket_now] no suggestion for pincode {pincode}")
+            # Selector-independent fallback: pick the first autosuggest
+            # entry via keyboard. Verified below.
+            await self.page.keyboard.press("ArrowDown")
+            await self.page.wait_for_timeout(300)
+            await self.page.keyboard.press("Enter")
 
         await self.page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+
+        # Verify the location actually took: the header chip should no longer
+        # say "Select Location" (it shows the chosen area once set).
+        still_unset = await self.page.locator('text="Select Location"').count()
+        if still_unset:
+            raise RuntimeError(
+                f"[bigbasket_now] header still says 'Select Location' after "
+                f"picking a suggestion for {pincode} — location not applied"
+            )
         self.current_pincode = pincode
         log.info("[bigbasket_now] location set to %s", pincode)
 

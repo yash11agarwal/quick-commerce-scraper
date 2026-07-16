@@ -74,18 +74,45 @@ class BlinkitScraper(BaseScraper):
             raise RuntimeError("[blinkit] location input not found — UI likely changed")
 
         # Pick the first autosuggest result for the typed pincode.
+        #
+        # NOTE: an earlier version had a last-resort selector of
+        # `div:has-text("<pincode>")` — which matches the container of the
+        # input box we just typed the pincode into. It "clicked" that,
+        # reported success, and the real dropdown was never touched (a live
+        # test showed the suggestion list visibly sitting unselected while
+        # the log said "location set"). Never use text-of-typed-value as a
+        # suggestion selector.
         picked = await self.click_first_available(
             [
                 '[class*="LocationSearchList"] div[role="button"]',
+                '[class*="LocationSearchList"] > div',
                 '[class*="address-list"] > div',
                 'div[class*="LocationSearchBox"] li',
-                # generic: first suggestion containing the pincode
-                f'div:has-text("{pincode}") >> nth=0',
             ],
             timeout=8,
         )
         if not picked:
-            raise RuntimeError(f"[blinkit] no location suggestion for pincode {pincode}")
+            # Selector-independent fallback: autosuggest lists are keyboard-
+            # navigable, and ArrowDown+Enter picks the first suggestion
+            # without depending on Blinkit's (frequently churning) class
+            # names. Verification below catches it if this didn't work.
+            await self.page.keyboard.press("ArrowDown")
+            await self.page.wait_for_timeout(300)
+            await self.page.keyboard.press("Enter")
+
+        # Verify a suggestion was ACTUALLY picked: the location modal (and
+        # its locality input) must disappear. If the element never existed
+        # under this selector, wait_for(hidden) passes immediately — this
+        # only trips when the modal is genuinely still open.
+        try:
+            await self.page.locator('input[name="select-locality"]').first.wait_for(
+                state="hidden", timeout=8000
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                f"[blinkit] location modal still open after trying to pick a "
+                f"suggestion for {pincode} — suggestion was not actually selected"
+            ) from exc
 
         await self.page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
         self.current_pincode = pincode
