@@ -51,6 +51,12 @@
   }
   .seg button + button { border-left: 1px solid var(--border); }
   .seg button[aria-pressed="true"] { color: var(--text-primary); font-weight: 600; }
+  .export-btn {
+    margin-left: auto; text-decoration: none;
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px;
+  }
+  .export-btn:hover { background: color-mix(in srgb, var(--text-primary) 5%, var(--surface-1)); }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
   .tile {
@@ -121,6 +127,7 @@
       <button data-days="30" aria-pressed="true">30 days</button>
       <button data-days="90" aria-pressed="false">90 days</button>
     </span>
+    <a id="btn-export" class="export-btn" href="/api/export.xlsx" download>⬇ Download Excel</a>
   </div>
 
   <div class="tiles" id="tiles"></div>
@@ -212,6 +219,8 @@ async function refresh() {
     return;
   }
   const qs = `pincode=${encodeURIComponent(state.pincode)}&query=${encodeURIComponent(state.query)}&days=${state.days}`;
+  // Keep the Excel download scoped to whatever is currently on screen.
+  document.getElementById("btn-export").href = `/api/export.xlsx?${qs}`;
   const [summary, best] = await Promise.all([
     getJSON(`/api/summary?${qs}`), getJSON(`/api/best-price?${qs}`),
   ]);

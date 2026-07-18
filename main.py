@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from qc_scraper.config import load_config
 from qc_scraper.scrapers import SCRAPER_REGISTRY, BaseScraper
@@ -88,6 +89,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", default="config.yaml", help="path to config YAML")
     parser.add_argument(
+        "--input", default=None, metavar="XLSX",
+        help="Excel workbook with Products + Pincodes sheets; overrides the "
+             "queries/pincodes lists in config.yaml (default: ./inputs.xlsx "
+             "is used automatically when it exists)",
+    )
+    parser.add_argument(
         "--platform", action="append", dest="platforms", metavar="NAME",
         help="run only this platform (repeatable); default: all enabled in config",
     )
@@ -105,8 +112,32 @@ def main() -> None:
     config = load_config(args.config)
     if args.headed:
         config.browser.headless = False
+
+    # Excel-driven inputs: an explicit --input path, or ./inputs.xlsx when
+    # present. Non-empty sheets override the config.yaml lists.
+    input_path = args.input
+    if input_path is None and Path("inputs.xlsx").exists():
+        input_path = "inputs.xlsx"
+    if input_path:
+        if not Path(input_path).exists():
+            raise SystemExit(
+                f"{input_path} not found — generate a template with "
+                "'python scripts/build_inputs_template.py'")
+        from qc_scraper.excel_io import load_search_inputs
+        queries, pincodes = load_search_inputs(input_path)
+        if queries:
+            config.queries = queries
+        if pincodes:
+            config.pincodes = pincodes
+        log.info("Using Excel inputs from %s: %d product(s) x %d pincode(s)",
+                 input_path, len(config.queries), len(config.pincodes))
+    else:
+        log.info("Using config.yaml inputs: %d product(s) x %d pincode(s)",
+                 len(config.queries), len(config.pincodes))
+
     if not config.pincodes or not config.queries:
-        raise SystemExit("config needs at least one pincode and one query")
+        raise SystemExit("need at least one pincode and one product "
+                         "(inputs.xlsx sheets or config.yaml lists are empty)")
 
     log.info("Any failures or empty-result searches save a screenshot + "
              "captured data under ./debug/<platform>/ for troubleshooting.")

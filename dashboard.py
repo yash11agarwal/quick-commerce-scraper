@@ -198,12 +198,39 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json(get_product_history(
                     self.db_path, params["platform"], params["product_id"],
                     params["pincode"], int(params.get("days", 30))))
+            elif parsed.path == "/api/export.xlsx":
+                self._send_xlsx(params)
             else:
                 self.send_error(404)
         except KeyError as exc:
             self.send_error(400, f"missing query parameter: {exc}")
         except Exception as exc:  # noqa: BLE001
             self.send_error(500, str(exc))
+
+    def _send_xlsx(self, params: dict) -> None:
+        """Build and stream the Excel export for the given filters."""
+        from io import BytesIO
+
+        from qc_scraper.excel_io import build_export_workbook
+
+        wb, _count = build_export_workbook(
+            self.db_path,
+            pincode=params.get("pincode") or None,
+            query=params.get("query") or None,
+            days=int(params["days"]) if params.get("days") else None,
+        )
+        buf = BytesIO()
+        wb.save(buf)
+        body = buf.getvalue()
+        filename = f"qc_export_{datetime.now():%Y%m%d_%H%M}.xlsx"
+        self.send_response(200)
+        self.send_header(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _send_json(self, data) -> None:
         body = json.dumps(data).encode()

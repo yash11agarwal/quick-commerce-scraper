@@ -132,13 +132,38 @@ it yet.
 
 ## Usage
 
-Edit `config.yaml` (pincodes, queries, platform toggles, rate limits), then:
+### Excel-driven inputs (recommended)
+
+Open **`inputs.xlsx`** in Excel: the **Products** sheet takes one product
+search term per row, the **Pincodes** sheet one delivery pincode per row
+(the Instructions tab walks through it). When `inputs.xlsx` exists next to
+`main.py` it is used automatically — no need to touch config.yaml for
+products/pincodes. Regenerate a fresh template any time with
+`python scripts/build_inputs_template.py`.
+
+Everything else (platform toggles, rate limits, browser settings) still
+lives in `config.yaml`.
 
 ```bash
 python main.py                       # full sweep, all enabled platforms
 python main.py --platform blinkit    # one platform only
 python main.py --headed -v          # visible browser + debug logs (selector triage)
+python main.py --input other.xlsx    # a different inputs workbook
 ```
+
+### Excel output
+
+Two ways to get results back out as a spreadsheet:
+
+- **Dashboard**: the **⬇ Download Excel** button (top right of the filter
+  row) exports exactly what the current filters show.
+- **Command line**: `python export_excel.py` writes
+  `data/export_<timestamp>.xlsx` (filters: `--pincode`, `--query`,
+  `--days N`, output path: `--out file.xlsx`).
+
+The workbook has two tabs: **Latest snapshot** (most recent observation of
+each product per platform per pincode) and **All observations** (the full
+time series).
 
 Results append to `data/observations.db` (SQLite, WAL). Because every sweep
 *appends* timestamped rows, price/stock history falls out of a simple query:
