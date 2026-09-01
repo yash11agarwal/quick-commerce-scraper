@@ -214,6 +214,11 @@ header text; behaviour while the store reads "Currently unavailable"; shapes of 
 `click_action`, `rating`, `eta_tag`; any category field; empty and blocked signatures;
 whether `/s/?q=` produces the same slice; `merchant_type` values.
 
+Status 1 September 2026: the adapter exists and stores exactly the evidence that answers the
+first two (every JSON response during a search, and the four `data.*` slices), but none of
+these has been looked at because the build environment could not reach the site. The
+platform spec, section 15, lists the one live run that closes them.
+
 ### Swiggy Instamart (Phase 3)
 `page_type` and `is_pre_search_tag` for pagination; nesting from `cards[]` to products;
 price keys on a no-discount row; empty signature; non-zero `statusCode` meaning; category

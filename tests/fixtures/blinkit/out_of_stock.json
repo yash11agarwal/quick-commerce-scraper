@@ -1,0 +1,59 @@
+{
+ "searchProductBffData": {
+  "snippets": [
+   {
+    "widget_type": "image_text_vr_type_header",
+    "data": {
+     "title": {
+      "text": "Showing results for Mango"
+     }
+    },
+    "tracking": {},
+    "layout_config": {}
+   },
+   {
+    "widget_type": "product_card_snippet_type_2",
+    "data": {
+     "product_id": "368933",
+     "name": {
+      "text": "Chaunsa Mango (Aam)"
+     },
+     "display_name": {
+      "text": "Chaunsa Mango (Aam)"
+     },
+     "brand_name": null,
+     "variant": {
+      "text": "400 g"
+     },
+     "normal_price": {
+      "text": "₹145"
+     },
+     "mrp": {
+      "text": "₹175"
+     },
+     "inventory": 0,
+     "is_sold_out": false,
+     "product_state": "out_of_stock",
+     "merchant_id": 30872,
+     "group_id": 1920716,
+     "stepper_data_v2": {
+      "max_count": 0
+     },
+     "meta": {
+      "merchant_id": 30872,
+      "product_id": "368933"
+     }
+    },
+    "tracking": {
+     "widget_meta": {},
+     "impression_map": {},
+     "click_map": {},
+     "entry_source_map": {},
+     "common_attributes": {},
+     "interactions_map": {}
+    },
+    "layout_config": {}
+   }
+  ]
+ }
+}

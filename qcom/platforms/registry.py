@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from qcom.core.models import PLATFORM_NAMES
 from qcom.platforms.base import PlatformAdapter
+from qcom.platforms.blinkit.adapter import BlinkitAdapter
 from qcom.platforms.fake.adapter import FakeAdapter
 
 REGISTRY: dict[str, type[PlatformAdapter]] = {
     FakeAdapter.name: FakeAdapter,
+    BlinkitAdapter.name: BlinkitAdapter,
 }
 
 #: Real platforms not yet implemented, with the phase that delivers each.
 PLANNED: dict[str, str] = {
-    "blinkit": "Phase 2",
     "swiggy_instamart": "Phase 3",
     "zepto": "Phase 3",
     "bigbasket": "Phase 3",

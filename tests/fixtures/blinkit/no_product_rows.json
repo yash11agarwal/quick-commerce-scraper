@@ -1,0 +1,22 @@
+{
+ "searchProductBffData": {
+  "snippets": [
+   {
+    "widget_type": "image_text_vr_type_header",
+    "data": {
+     "title": {
+      "text": "Showing results for Mango"
+     }
+    },
+    "tracking": {},
+    "layout_config": {}
+   },
+   {
+    "widget_type": "grid_container_vr",
+    "data": {},
+    "tracking": {},
+    "layout_config": {}
+   }
+  ]
+ }
+}

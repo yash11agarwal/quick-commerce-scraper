@@ -179,7 +179,8 @@ def choose_suggestion(texts: list[str], expectation: LocationExpectation) -> Sug
             allowed.append((i, t))
     if not allowed:
         raise LocationNotSetError(
-            f"every suggestion for {pin} names a state that pincode cannot be in",
+            f"every suggestion for {pin} names a state that pincode cannot be in: "
+            + "; ".join(f"{t!r} {why}" for t, why in rejected),
             detail={"suggestions": texts, "rejected": rejected},
         )
 

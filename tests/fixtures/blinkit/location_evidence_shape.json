@@ -1,0 +1,8 @@
+{
+ "location": null,
+ "merchant": null,
+ "eta": null,
+ "addressesV2": null,
+ "chainId": null,
+ "_note": "placeholder shape only: the real slices were never captured; see README.md"
+}

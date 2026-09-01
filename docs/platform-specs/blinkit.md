@@ -7,6 +7,11 @@ CONFIRMED means observed live on 18 August 2026. OPEN means neither playbook say
 Adapter name: `blinkit`. Reference probe: 700048, "Mango", expected city Kolkata, expected
 state West Bengal.
 
+Status (1 September 2026): adapter written (`qcom/platforms/blinkit/`), contract suite and
+offline tests green, **not yet verified live**. Section 14 says what the code does where the
+playbook left room, and section 15 what the first live run has to confirm. The build
+environment could not reach the site (section 15), so every OPEN item below is still OPEN.
+
 ## 1. Profile
 
 | | |
@@ -164,6 +169,54 @@ snippets vary. Class names are irrelevant because nothing here uses them.
 MRP; the 18 August table already documents both cases), `empty`, `out_of_stock`
 (the Chaunsa Mango row), `missing_mrp` (a Paper Boat row), `corrupted` (truncated JSON), plus
 the `data.location`/`data.merchant`/`data.eta` evidence dump.
+
+## 14. Implementation notes (Phase 2)
+
+What the adapter does at each point where the playbook describes an outcome but not a
+mechanism. Each is a choice, recorded here so a live run can confirm or overturn it.
+
+| step | what the code does | why |
+|---|---|---|
+| App-download banner (section 2 step 1) | nothing; no selector is documented | a guess at a dismiss button would be a guess. If the banner blocks the picker, the picker click times out and the failure is `LOCATION_NOT_SET` with a screenshot |
+| Finding the picker | `get_by_text("Select Location")`, or the current header label when one is already shown | the two label forms the playbook names |
+| Typing the pincode | `get_by_placeholder("search delivery location")`, clicked, then typed one character at a time | typed, not filled, so the autocomplete fires |
+| Enumerating suggestions | in-page script: the deepest elements whose text contains the pincode (inputs excluded), each widened to the highest ancestor that still contains exactly one such element; that ancestor is marked and later clicked | reads a suggestion made of several spans as one text (the playbook's `PatipukurKolkata, West Bengal 700048, India`) and never treats the list container as a candidate. The list is polled until it has stopped changing |
+| Choosing | `core.location.choose_suggestion` | pincode plus zone table plus optional city; never index 0; every rejection recorded in the evidence |
+| Readback | in-page script: the deepest element carrying `Delivery in N minutes` / `Currently unavailable` / `Select Location`, then the smallest ancestor whose text also carries the pincode; `<header>` text as the fallback witness | the header is the only confirmed witness. `effective_pincode` is the requested pincode only when that text contains it, and `core.location.check_readback` also rejects a text naming an impossible state |
+| Jar reuse | the header is read back before the picker is touched; a verified header skips the picker, anything else runs it | rule 4 holds on every context, jar or not |
+| Store id | `EffectiveLocation.store_id = None`; `merchant_id` per row | no confirmed readback carries a store id (open question 2) |
+| Search entry | `get_by_placeholder("Search for atta dal and more")` clicked, term typed, Enter; if that input is absent or not clickable, `goto https://blinkit.com/s/?q=<term>` | the capture's `request.navigation` says `header_input` or `direct_url` |
+| Waiting and scrolling | poll until `ui.search.searchProductBffData.snippets` is non-empty (20 s), then wheel 3000 px with 800 ms pauses until the product count stops growing or reaches `max_results`, at most 12 steps | the playbook's four steps were a fixed number; this stops when the page does |
+| Primary capture | `JSON.stringify({searchProductBffData: <slice>})` evaluated in the page, stored as `page_state`, strategy `redux_store` | the wrapper means a missing slice is still stored (as `null`) and reported by the parser as `SCHEMA_DRIFT` at `searchProductBffData`, with the bytes on disk |
+| Evidence captures | every JSON response from a `blinkit.com` host during the search (`network_capture`, `network_response`, not parsed, at most 200); the `data.location`, `data.merchant`, `data.eta`, `data.addressesV2`, `data.chainId` slices (`location_evidence`, `page_state`, not parsed) | open questions 1 and 2 are answered by reading these after the first live run |
+| Walls | HTTP 403 on any document (the home page, the search route, or a document served after the header search) is `BLOCKED`; 429 is `RATE_LIMITED`; 5xx is `UNKNOWN`; a page without `window.__reduxStore__` is `UNKNOWN` | section 10; nothing is retried past a wall |
+| Empty | a slice with no product snippet is `SCHEMA_DRIFT`, reason `empty_signature_unconfirmed`, with the snippet count and widget types in the detail | section 9 |
+| `health` | `header_contains_pincode`, `redux_store_present`, `network_evidence`, `documented_paths_present` (the parser over the live capture; a drift names its path), `inventory_is_int`, `known_merchant_present` (warning only) | section 11 |
+
+Fixtures under `tests/fixtures/blinkit/` are synthesised from the playbook's shape and data
+table, not captured; `tests/fixtures/blinkit/README.md` says so and how to replace them.
+
+## 15. Live verification still owed
+
+The build environment (1 September 2026) could not reach Blinkit: the site's Cloudflare front
+answered HTTP 403 to a non-browser client from that egress, and the environment's egress
+gateway closed the tunnel during Chromium's TLS handshake. Neither is a Blinkit finding; both
+are the environment. The adapter has therefore been exercised only against a local stand-in
+served through a Playwright route (`tests/platforms/blinkit/fixture_site.py`), which models the
+spec, not the live markup.
+
+To close Phase 2, on a machine with ordinary internet access:
+
+```
+python -m qcom smoke --platform blinkit --pincode 700048 --term "Mango" --city Kolkata --save-captures captures/blinkit
+python -m qcom health --platform blinkit
+```
+
+and check, in order: the readback line shows `effective_pincode=700048` and an address in West
+Bengal; the `redux_store` capture parses to about 20 rows; `captures/blinkit/index.json` lists
+the search XHR URL (open question 1) and `002_location_evidence.json` shows whether the
+`data.*` slices carry the pincode or a merchant id (open question 2). Then replace the
+fixtures as the fixtures README says, and update sections 3, 5 and 9 here with what was seen.
 
 ## Open questions
 

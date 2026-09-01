@@ -14,14 +14,31 @@ adapter does and what is still unverified.
 |---|---|---|
 | 0 | architecture, platform specs, open questions | done |
 | 1 | scaffolding, run loop, retry, resume, Excel in and out, fake adapter, tests | done |
-| 2 | Blinkit adapter, live | not started |
+| 2 | Blinkit adapter, live | adapter written, offline tests green; **live smoke not yet run** (see below) |
 | 3 | Swiggy Instamart, Zepto, BigBasket adapters, live | not started |
 | 4 | proxy rotation, health, data quality, reparse | partly: health and data quality exist, wired to the fake |
 | 5 | documentation, clean run | not started |
 
-Until Phase 2 lands there is no real platform adapter. Everything below runs against the
-built-in fake adapter (`--platforms fake`), which returns fixture data and never touches the
-network.
+Blinkit is the only real adapter so far. A blank `platforms` setting means Blinkit. The
+built-in fake adapter (`--platforms fake`) returns fixture data and never touches the network;
+it is what the end-to-end tests use.
+
+### Phase 2 is not done until a live run is pasted
+
+The Blinkit adapter was built and tested in an environment that could not reach blinkit.com
+(Cloudflare answered 403 to a non-browser client, and the environment's egress gateway would
+not complete Chromium's TLS handshake). Its tests drive a real Chromium against a local
+stand-in of the site, and its parser fixtures are synthesised from the playbook's data table
+(`tests/fixtures/blinkit/README.md`). What remains is one live run on an ordinary machine:
+
+```bash
+python -m qcom smoke --platform blinkit --pincode 700048 --term "Mango" --city Kolkata --save-captures captures/blinkit
+python -m qcom health --platform blinkit
+```
+
+Paste both outputs back. `captures/blinkit/` then holds the raw bytes needed to replace the
+synthesised fixtures with real ones and to answer the open questions in
+`docs/platform-specs/blinkit.md`. Add `--headed` to watch it.
 
 ## Setup
 
@@ -40,8 +57,9 @@ Python 3.11 or newer.
 python -m qcom template --out input.xlsx               # blank input workbook
 python -m qcom run --input input.xlsx --out output/    # full run
 python -m qcom resume --run-id <id>                    # finish an interrupted run
-python -m qcom smoke --platform fake --pincode 700048 --term "amul butter"
-python -m qcom health --platform fake                  # drift check; exits non-zero on drift
+python -m qcom smoke --platform blinkit --pincode 700048 --term "Mango" --city Kolkata
+python -m qcom smoke --platform blinkit --pincode 700048 --term "Mango" --save-captures captures/blinkit   # also writes every raw body
+python -m qcom health --platform blinkit               # drift check; exits non-zero on drift
 pytest                                                 # full suite, offline
 ```
 
@@ -109,7 +127,9 @@ and the other platforms carry on.
 ## Configuration
 
 `config.yaml` holds throttle, retry policy, circuit breaker, concurrency and storage paths, and
-is hashed into `run_meta`. Secrets (proxy server and credentials) live in `.env`, which is
+is hashed into `run_meta`. `browser.executable_path` points at a specific Chromium when
+Playwright's own download is not wanted; the browser-driven tests read `QCOM_CHROMIUM_PATH`
+for the same purpose and skip when no Chromium is installed. Secrets (proxy server and credentials) live in `.env`, which is
 gitignored; `.env.example` documents the keys. Session jars under `sessions/` contain tokens and
 are gitignored too.
 

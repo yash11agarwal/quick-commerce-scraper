@@ -1,10 +1,12 @@
 # V2 architecture
 
-Status: Phase 1 complete (scaffolding, run loop, fake adapter, Excel in and out, tests). Written
-1 September 2026 against the three playbooks in `docs/playbooks/`, the requirements in
-`docs/REQUIREMENTS.md` and the standing rules in `CLAUDE.md`. Section 21 records the owner's
-Phase 0 decisions. Anything marked OPEN is a gap the playbooks do not close; every OPEN item is
-collected in `docs/OPEN_QUESTIONS.md`. No real platform adapter exists yet (Phases 2 and 3).
+Status: Phase 1 complete (scaffolding, run loop, fake adapter, Excel in and out, tests). Phase 2
+(Blinkit) is written and green offline, including browser-driven tests against a routed
+stand-in of the site, but has not been run live; `docs/platform-specs/blinkit.md` section 15
+says what is owed. Written 1 September 2026 against the three playbooks in `docs/playbooks/`,
+the requirements in `docs/REQUIREMENTS.md` and the standing rules in `CLAUDE.md`. Section 21
+records the owner's Phase 0 decisions. Anything marked OPEN is a gap the playbooks do not close;
+every OPEN item is collected in `docs/OPEN_QUESTIONS.md`.
 
 This document is written for the owner of the project, who is not a programmer. Where a
 choice was mine, the reasons are spelled out and the choice is listed again in section 20 so
@@ -504,7 +506,7 @@ strategy that produced it. There is no silent downgrade; a fallback is a logged 
 
 | platform | primary | secondary | DOM |
 |---|---|---|---|
-| Blinkit | `redux_store`: read `getState().ui.search.searchProductBffData.snippets` after the header search | none named by the playbook; the network capture of the search XHR is stored as evidence but its URL is OPEN | not in the ladder; the DOM lacks inventory |
+| Blinkit | `redux_store`: read `getState().ui.search.searchProductBffData` after the header search, stored as `{"searchProductBffData": ...}` so a missing slice is stored and reported as drift | none named by the playbook; every JSON response from blinkit.com during the search is stored as `network_capture` evidence (not parsed) because the search XHR URL is OPEN; `/s/?q=` is a navigation fallback, not a data strategy | not in the ladder; the DOM lacks inventory |
 | Swiggy Instamart | `ssr_global_search`: GET `/instamart/search?query=<term>&globalSearch=true` with the located context's cookies, parse `___INITIAL_STATE___` | `search_v2_api`: POST `/api/instamart/search/v2` for pages after the first | not in the ladder; prices concatenate in the DOM |
 | Zepto | `xhr_capture`: navigate `/search?query=<term>` and capture the POST `/user-search-service/api/v3/search` body below page JS | `api_replay`: POST the same endpoint from the context; cookie and header requirements OPEN | **forbidden**: the DOM is rewritten by the `always_in_stock` experiment |
 | BigBasket | `listing_svc_capture`: navigate `/ps/?q=<term>` and capture GET `/listing-svc/v2/products?type=ps&slug=<term>&page=1&bucket_id=52` | `listing_svc_replay`: GET the same endpoint from the context for pages 2 and up | not in the ladder; `__NEXT_DATA__` is a trap |

@@ -105,6 +105,7 @@ def smoke(
     term: str = typer.Option(..., "--term"),
     max_results: int = typer.Option(10, "--max-results"),
     city: str | None = typer.Option(None, "--city"),
+    save_captures: Path | None = typer.Option(None, "--save-captures", help="directory to write every raw capture body into, for building parser fixtures"),
     config: Path = typer.Option(Path("config.yaml"), "--config", "-c"),
     headed: bool = typer.Option(False, "--headed"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -144,6 +145,8 @@ def smoke(
         for i, c in enumerate(captures, start=1):
             c.capture_id = f"smoke:{i:03d}"
             typer.echo(f"capture {i}: strategy={c.strategy} source={c.source.value} url={c.url} status={c.http_status} bytes={c.size_bytes} parse={c.parse}")
+        if save_captures is not None:
+            typer.echo(f"captures written to {_dump_captures(save_captures, captures)}")
         parsed = [(c, adapter.parse(c)) for c in captures if c.parse]
         job = Job(job_id="smoke", run_id="smoke", platform=platform, requested_pincode=pincode, search_term=term, input_row_id=2, pincode_row_id=2, max_results=max_results)
         rows, events = finalise_listings(job, parsed, loc)
@@ -159,6 +162,21 @@ def smoke(
             browser.close_context(handle)
         if browser is not None:
             browser.close()
+
+
+def _dump_captures(directory: Path, captures: list) -> Path:
+    """Raw bodies verbatim, one file each, plus an index. Header names only; never cookie values."""
+    import json
+
+    directory.mkdir(parents=True, exist_ok=True)
+    index = []
+    for i, c in enumerate(captures, start=1):
+        ext = "json" if "json" in (c.content_type or "") else ("html" if "html" in (c.content_type or "") else "bin")
+        name = f"{i:03d}_{c.strategy}.{ext}"
+        (directory / name).write_bytes(c.body)
+        index.append({"file": name, "strategy": c.strategy, "source": c.source.value, "url": c.url, "http_status": c.http_status, "content_type": c.content_type, "bytes": c.size_bytes, "sha256": c.sha256, "parse": c.parse, "request": c.request})
+    (directory / "index.json").write_text(json.dumps(index, indent=1, default=str), encoding="utf-8")
+    return directory
 
 
 @app.command()

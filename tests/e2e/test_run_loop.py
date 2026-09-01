@@ -198,7 +198,16 @@ def test_proxy_error_without_fallback_aborts_the_run(cfg):
 
 
 def test_planning_rejects_unimplemented_platform(cfg):
+    # Phase 2 made Blinkit real; the Phase 3 platforms are still planned-only.
     with pytest.raises(ValueError, match="not implemented yet"):
-        plan_run(cfg, spec_for(["x"], ["700048"], platforms=["blinkit"]))
-    with pytest.raises(ValueError, match="no real platform adapter"):
-        plan_run(cfg, spec_for(["x"], ["700048"]), platforms=[])
+        plan_run(cfg, spec_for(["x"], ["700048"], platforms=["zepto"]))
+    with pytest.raises(ValueError, match="unknown platform"):
+        plan_run(cfg, spec_for(["x"], ["700048"], platforms=["amazon_now"]))
+
+
+def test_blank_platforms_means_every_implemented_real_platform(cfg):
+    from qcom.platforms.registry import implemented_platforms
+
+    run_id = plan_run(cfg, spec_for(["x"], ["700048"]), platforms=[])
+    with Storage(cfg.storage.path) as s:
+        assert sorted({j["platform"] for j in s.job_rows(run_id)}) == implemented_platforms() == ["blinkit"]

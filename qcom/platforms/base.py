@@ -54,10 +54,15 @@ def load_json(raw: RawCapture) -> Any:
         raise ParseError(f"capture is not valid JSON: {exc}", detail={"capture_id": raw.capture_id}) from exc
 
 
-def require(obj: Any, path: str, *, expect: type | tuple[type, ...] | None = None) -> Any:
-    """Walk ``a.b[0].c`` and raise SchemaDriftError naming the path if any step is missing or mistyped."""
+def require(obj: Any, path: str, *, expect: type | tuple[type, ...] | None = None, base: str = "") -> Any:
+    """Walk ``a.b[0].c`` and raise SchemaDriftError naming the path if any step is missing or mistyped.
+
+    ``base`` is the path of ``obj`` inside the whole payload, so a drift deep inside a row is
+    reported as ``snippets[5].data.inventory`` rather than ``inventory``. A ``None`` value passes
+    the type check (absent-by-design values are the caller's decision); a missing key never does.
+    """
     node = obj
-    walked = ""
+    walked = base
     for step in _steps(path):
         if isinstance(step, int):
             if not isinstance(node, list) or step >= len(node):

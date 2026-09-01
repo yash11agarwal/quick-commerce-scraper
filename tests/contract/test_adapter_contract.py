@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 import pytest
 
@@ -15,15 +16,20 @@ from qcom.platforms.registry import REGISTRY
 ADAPTERS = sorted(REGISTRY.items())
 
 
+FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
+
+
 def _normal_capture(adapter: PlatformAdapter) -> RawCapture:
-    """A parseable capture for the adapter, from its own fixture set (adapters ship fixtures under fixtures/)."""
+    """A parseable capture for the adapter: the fake searches itself; browser adapters ship
+    ``tests/fixtures/<name>/normal.json``, which must exist for the adapter to be registered."""
     from qcom.core.runner import NoBrowserPage
 
-    page = NoBrowserPage(adapter.probe.pincode) if not adapter.needs_browser else None
-    if page is None:
-        pytest.skip("browser adapters get their contract fixtures in their own phase")
-    caps = adapter.search(page, adapter.probe.term, 5)
-    return next(c for c in caps if c.parse)
+    if not adapter.needs_browser:
+        caps = adapter.search(NoBrowserPage(adapter.probe.pincode), adapter.probe.term, 5)
+        return next(c for c in caps if c.parse)
+    path = FIXTURES / adapter.name / "normal.json"
+    assert path.exists(), f"{adapter.name} is registered but has no {path}"
+    return RawCapture(platform=adapter.name, strategy="fixture", source=CaptureSource.FIXTURE, url=str(path), body=path.read_bytes(), captured_at_utc=now_utc())
 
 
 @pytest.mark.parametrize("name,cls", ADAPTERS)

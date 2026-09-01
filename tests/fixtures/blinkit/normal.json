@@ -1,0 +1,235 @@
+{
+ "searchProductBffData": {
+  "snippets": [
+   {
+    "widget_type": "image_text_vr_type_header",
+    "data": {
+     "title": {
+      "text": "Showing results for Mango"
+     }
+    },
+    "tracking": {},
+    "layout_config": {}
+   },
+   {
+    "widget_type": "grid_container_vr",
+    "data": {},
+    "tracking": {},
+    "layout_config": {}
+   },
+   {
+    "widget_type": "product_card_snippet_type_2",
+    "data": {
+     "product_id": "800171",
+     "name": {
+      "text": "Mercely's Merii Mango Paradise Ice Cream Can"
+     },
+     "display_name": {
+      "text": "Mercely's Merii Mango Paradise Ice Cream Can"
+     },
+     "brand_name": null,
+     "variant": {
+      "text": "200 ml"
+     },
+     "normal_price": {
+      "text": "₹179"
+     },
+     "mrp": {
+      "text": "₹200"
+     },
+     "inventory": 3,
+     "is_sold_out": false,
+     "product_state": "available",
+     "merchant_id": 30872,
+     "group_id": 3126814,
+     "stepper_data_v2": {
+      "max_count": 3
+     },
+     "meta": {
+      "merchant_id": 30872,
+      "product_id": "800171"
+     }
+    },
+    "tracking": {
+     "widget_meta": {},
+     "impression_map": {},
+     "click_map": {},
+     "entry_source_map": {},
+     "common_attributes": {},
+     "interactions_map": {}
+    },
+    "layout_config": {}
+   },
+   {
+    "widget_type": "product_card_snippet_type_2",
+    "data": {
+     "product_id": "368933",
+     "name": {
+      "text": "Chaunsa Mango (Aam)"
+     },
+     "display_name": {
+      "text": "Chaunsa Mango (Aam)"
+     },
+     "brand_name": null,
+     "variant": {
+      "text": "400 g"
+     },
+     "normal_price": {
+      "text": "₹145"
+     },
+     "mrp": {
+      "text": "₹175"
+     },
+     "inventory": 0,
+     "is_sold_out": false,
+     "product_state": "out_of_stock",
+     "merchant_id": 30872,
+     "group_id": 1920716,
+     "stepper_data_v2": {
+      "max_count": 0
+     },
+     "meta": {
+      "merchant_id": 30872,
+      "product_id": "368933"
+     }
+    },
+    "tracking": {
+     "widget_meta": {},
+     "impression_map": {},
+     "click_map": {},
+     "entry_source_map": {},
+     "common_attributes": {},
+     "interactions_map": {}
+    },
+    "layout_config": {}
+   },
+   {
+    "widget_type": "product_card_snippet_type_2",
+    "data": {
+     "product_id": "780291",
+     "name": {
+      "text": "Mango Instant Voucher"
+     },
+     "display_name": {
+      "text": "Mango Instant Voucher"
+     },
+     "brand_name": null,
+     "variant": {
+      "text": "1 unit"
+     },
+     "normal_price": {
+      "text": "₹495"
+     },
+     "mrp": {
+      "text": "₹500"
+     },
+     "inventory": 26,
+     "is_sold_out": false,
+     "product_state": "available",
+     "merchant_id": 35940,
+     "group_id": 2841015,
+     "stepper_data_v2": {
+      "max_count": 26
+     },
+     "meta": {
+      "merchant_id": 35940,
+      "product_id": "780291"
+     }
+    },
+    "tracking": {
+     "widget_meta": {},
+     "impression_map": {},
+     "click_map": {},
+     "entry_source_map": {},
+     "common_attributes": {},
+     "interactions_map": {}
+    },
+    "layout_config": {}
+   },
+   {
+    "widget_type": "product_card_snippet_type_2",
+    "data": {
+     "product_id": "298",
+     "name": {
+      "text": "Maaza Mango Drink 600 ml"
+     },
+     "display_name": {
+      "text": "Maaza Mango Drink 600 ml"
+     },
+     "brand_name": null,
+     "variant": {
+      "text": "600 ml"
+     },
+     "normal_price": {
+      "text": "₹34"
+     },
+     "mrp": {
+      "text": "₹35"
+     },
+     "inventory": 9,
+     "is_sold_out": false,
+     "product_state": "available",
+     "merchant_id": 30872,
+     "group_id": 1951318,
+     "stepper_data_v2": {
+      "max_count": 9
+     },
+     "meta": {
+      "merchant_id": 30872,
+      "product_id": "298"
+     }
+    },
+    "tracking": {
+     "widget_meta": {},
+     "impression_map": {},
+     "click_map": {},
+     "entry_source_map": {},
+     "common_attributes": {},
+     "interactions_map": {}
+    },
+    "layout_config": {}
+   },
+   {
+    "widget_type": "product_card_snippet_type_2",
+    "data": {
+     "product_id": "5440",
+     "name": {
+      "text": "Paper Boat Aamras Mango Drink"
+     },
+     "display_name": {
+      "text": "Paper Boat Aamras Mango Drink"
+     },
+     "brand_name": null,
+     "variant": {
+      "text": "215 ml"
+     },
+     "normal_price": {
+      "text": "₹40"
+     },
+     "mrp": null,
+     "inventory": 8,
+     "is_sold_out": false,
+     "product_state": "available",
+     "merchant_id": 30872,
+     "group_id": 2460458,
+     "stepper_data_v2": {
+      "max_count": 8
+     },
+     "meta": {
+      "merchant_id": 30872,
+      "product_id": "5440"
+     }
+    },
+    "tracking": {
+     "widget_meta": {},
+     "impression_map": {},
+     "click_map": {},
+     "entry_source_map": {},
+     "common_attributes": {},
+     "interactions_map": {}
+    },
+    "layout_config": {}
+   }
+  ]
+ }
+}

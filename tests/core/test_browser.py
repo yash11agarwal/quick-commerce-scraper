@@ -25,6 +25,7 @@ def test_context_lifecycle_and_session_jar(tmp_path: Path):
     try:
         mgr.start()
     except PlaywrightError as exc:
+        mgr.close()  # stop the driver even on the skip path, or every later Playwright test sees a running loop
         if "Executable doesn't exist" in str(exc) or "playwright install" in str(exc):
             pytest.skip(f"no chromium installed: {exc}")
         raise
