@@ -2,10 +2,15 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-data/*.db
-data/*.db-wal
-data/*.db-shm
-data/*.csv
 .pytest_cache/
+*.egg-info/
+
+# secrets and session tokens
+.env
+sessions/
+
+# run data
+data/
+runs/
+output/
 *.log
-debug/

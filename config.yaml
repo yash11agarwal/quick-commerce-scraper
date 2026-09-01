@@ -1,57 +1,45 @@
-# ---------------------------------------------------------------------------
-# quick-commerce-scraper configuration
-#
-# This file drives scheduled runs: every enabled platform is scraped for
-# every (pincode x query) combination and results are appended to SQLite.
-# ---------------------------------------------------------------------------
+# qcom configuration. Versioned. No secrets here: proxy credentials live in .env.
+version: 2
 
-# Delivery locations to monitor. Each platform sets the location BEFORE any
-# product/inventory data is fetched (hyperlocal catalogs differ per store).
-pincodes:
-  - "110001"   # New Delhi (Connaught Place)
-  - "560001"   # Bengaluru (MG Road)
-
-# Product search terms to track.
-queries:
-  - "amul butter 500g"
-  - "maggi noodles"
-  - "coca cola 750ml"
-
-# Enable/disable individual platform adapters.
-platforms:
-  blinkit: true
-  # Swiggy serves an explicit "Request Blocked — your request looks
-  # automated" page (WAF bot-detection confirmed by live-test screenshot).
-  # No selector fix helps; needs a residential proxy (browser.proxy) at
-  # minimum. Disabled by default so runs don't waste ~2 min on it.
-  swiggy_instamart: false
-  zepto: true
-  bigbasket_now: true
-  amazon_now: true
-  flipkart_minutes: true
-
-# Politeness / anti-hammering controls (per-domain).
-rate_limit:
-  min_delay_seconds: 8      # minimum gap between requests to the same domain
-  jitter_seconds: 4         # random 0..N seconds added on top of min delay
-
-retry:
-  max_attempts: 3           # total attempts per navigation/step
-  backoff_base_seconds: 2   # delay = base * 2^(attempt-1), i.e. 2s, 4s, 8s...
+run:
+  max_failure_rate: 0.2            # above this share of failed jobs the run exits non-zero
+  output_dir: output
 
 browser:
   headless: true
-  timeout_seconds: 45       # per-navigation / per-wait timeout
-  # Optional upstream proxy for Playwright, e.g. "http://user:pass@host:port".
-  # Residential/mobile egress is often required in practice; datacenter IPs
-  # are frequently blocked by these platforms.
-  proxy: null
-  # Optional path to a specific Chromium binary (defaults to the browser
-  # installed via `playwright install chromium`).
-  executable_path: null
+  device: Desktop Chrome           # a Playwright built-in device profile
+  navigation_timeout_s: 45
+  launch_attempts: 3               # browser acquisition is unreliable; retried with backoff
+  executable_path: null            # leave null to use the Chromium that `playwright install chromium` downloads
+
+proxy:
+  label: null                      # provider label written to run_meta; credentials in .env
+
+throttle:
+  min_gap_s: 8                     # minimum gap between requests to one host
+  jitter_s: 4                      # random 0..N seconds added on top
+
+retry:                             # the policy table from docs/REQUIREMENTS.md section 6
+  network_timeout:  {attempts: 3, backoff_base_s: 2, jitter_s: 1}
+  rate_limited:     {attempts: 2, backoff_base_s: 60, jitter_s: 5}
+  proxy_error:      {attempts: 2, backoff_base_s: 5, jitter_s: 1}
+  location_not_set: {attempts: 2, backoff_base_s: 3, jitter_s: 1}
+  unknown:          {attempts: 1, backoff_base_s: 0, jitter_s: 0}
+
+circuit_breaker:
+  consecutive_failures: 5          # per platform, per run
+
+concurrency:
+  max_platforms_in_parallel: 2     # 8 GB machine: two Chromium instances at once
+  blinkit: 1                       # browser contexts per platform
+  swiggy_instamart: 1
+  zepto: 1
+  bigbasket: 1
 
 storage:
-  sqlite_path: "data/observations.db"
+  path: data/qcom.sqlite
+  sessions_dir: sessions
+  runs_dir: runs
 
-# Max products to record per (platform, pincode, query) search.
-max_results_per_search: 15
+quality:
+  price_move_warn_pct: 40          # flag when selling price moves more than this since the previous run

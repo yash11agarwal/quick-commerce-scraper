@@ -1,0 +1,7 @@
+{
+  "platform": "fake",
+  "store": {"id": "FAKE-STORE-{pincode}", "eta_minutes": 12, "pincode": "{pincode}"},
+  "page": 1,
+  "total_pages": 1,
+  "products": []
+}

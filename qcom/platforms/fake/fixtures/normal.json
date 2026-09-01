@@ -1,0 +1,13 @@
+{
+  "platform": "fake",
+  "store": {"id": "FAKE-STORE-{pincode}", "eta_minutes": 12, "pincode": "{pincode}"},
+  "page": 1,
+  "total_pages": 2,
+  "products": [
+    {"id": "F001", "name": "{term} Classic", "brand": "Amul", "pack": "500 g", "mrp": "305.00", "price": "275.00", "base_price": "290.00", "stock": 5, "category": "Dairy > Butter", "url": "https://fake.example/p/F001", "image": "https://fake.example/i/F001.jpg"},
+    {"id": "F002", "name": "{term} Lite", "brand": "Amul", "pack": "100 g", "mrp": "62.00", "price": "62.00", "base_price": null, "stock": 14, "category": "Dairy > Butter", "url": "https://fake.example/p/F002", "image": "https://fake.example/i/F002.jpg"},
+    {"id": "F003", "name": "{term} Unsalted", "brand": "Mother Dairy", "pack": "500 g", "mrp": null, "price": "268.00", "base_price": null, "stock": 2, "category": "Dairy > Butter", "url": "https://fake.example/p/F003", "image": null},
+    {"id": "F004", "name": "{term} Garlic Spread", "brand": "Nutralite", "pack": "1 pc (120 ml)", "mrp": "40.00", "price": "45.00", "base_price": null, "stock": 0, "category": "Dairy > Spreads", "url": "https://fake.example/p/F004", "image": "https://fake.example/i/F004.jpg"},
+    {"id": "F005", "name": "{term} Multipack", "brand": "Amul", "pack": "6 x 100 g", "mrp": "372.00", "price": "349.00", "base_price": null, "stock": 1, "category": "Dairy > Butter", "url": "https://fake.example/p/F005", "image": "https://fake.example/i/F005.jpg"}
+  ]
+}

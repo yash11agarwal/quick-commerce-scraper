@@ -1,267 +1,121 @@
-# quick-commerce-scraper
+# qcom: quick-commerce price and availability scraper (V2)
 
-Modular Python tool that monitors **product availability, pricing, and stock
-signals** across six Indian quick-commerce platforms:
+Takes an Excel workbook of product names and pincodes, fetches live listings from Blinkit,
+Swiggy Instamart, Zepto and BigBasket at each pincode, and writes an Excel workbook of results
+with every raw response stored so any number can be traced back to the bytes it came from.
 
-| Platform | Adapter | Data source | Stock granularity exposed |
-|---|---|---|---|
-| Blinkit | `qc_scraper/scrapers/blinkit.py` | intercepted internal JSON (`/v*/search`, layout API) | capped `inventory` int → **estimate** |
-| Swiggy Instamart | `swiggy_instamart.py` | intercepted internal JSON (`/api/instamart/search`) | mostly **boolean** `in_stock` |
-| Zepto | `zepto.py` | intercepted internal JSON (`api.zeptonow.com/api/v3/search`) | **boolean** `outOfStock`; occasional capped qty → estimate |
-| BigBasket Now | `bigbasket_now.py` | intercepted internal JSON (`listing-svc/v2/products`) | **boolean** (`avail_status` codes) |
-| Amazon Now | `amazon_now.py` | hybrid: `/s/query` interception + DOM `data-*` fallback (see below) | **boolean**; "Only N left" strings → estimate |
-| Flipkart Minutes | `flipkart_minutes.py` | intercepted internal JSON (`rome.api.flipkart.com .../page/fetch`) | **boolean** intents; "only N left" labels → estimate |
+Read `CLAUDE.md` first: it holds the rules this code is built to. `docs/ARCHITECTURE.md`
+explains the design in plain language. `docs/platform-specs/` says exactly what each platform
+adapter does and what is still unverified.
 
-## Current status (last live test pass)
+## Status
 
-This project reverse-engineers six actively-hostile-to-bots websites, so
-"works" is a moving target. Here's the honest state as of the most recent
-end-to-end test run against the real sites from a residential IP:
-
-| Platform | Status | Notes |
+| phase | what | state |
 |---|---|---|
-| Blinkit | ✅ Working | Location + search both succeed; location step is a bit slow (~30s). |
-| BigBasket Now | ✅ Working | Same as above; location step took ~100s in testing. |
-| Swiggy Instamart | ❌ Blocked | Site returned what looked like a bot-detection/"request blocked" page before our selectors even got a chance. Likely needs a residential proxy, not a selector fix — see `swiggy_instamart.py`'s docstring. |
-| Zepto | ❌ Broken | Location succeeds, but the search API endpoint we listen for never fires — it's likely moved. See `zepto.py`'s docstring; `API_URL_PATTERNS` has been broadened to capture diagnostic evidence on the next failed run. |
-| Amazon Now | ❌ Broken | Was silently landing on the *regular* Amazon marketplace instead of the 15-minute storefront — this is now a loud, caught failure instead of silently-wrong data (see `amazon_now.py`). The real "Now" entry point still needs re-discovering live. |
-| Flipkart Minutes | ❌ Broken | Was reporting "location set" successfully while the pincode was never actually accepted, so every search silently came back with 0 products. Now verified and will fail loudly instead. |
+| 0 | architecture, platform specs, open questions | done |
+| 1 | scaffolding, run loop, retry, resume, Excel in and out, fake adapter, tests | done |
+| 2 | Blinkit adapter, live | not started |
+| 3 | Swiggy Instamart, Zepto, BigBasket adapters, live | not started |
+| 4 | proxy rotation, health, data quality, reparse | partly: health and data quality exist, wired to the fake |
+| 5 | documentation, clean run | not started |
 
-**Also found:** keyword search can grab the wrong SKU/pack-size for a query
-(whatever the parser sees as the first/best match) — see "Exact-SKU
-tracking" below for the fix.
-
-Since these sites actively block non-residential traffic, whoever maintains
-this next likely can't reproduce a live failure from wherever they're
-working. That's what the debug-capture feature (below) is for.
-
-## ⚠️ Read this first
-
-- **No official APIs.** Every adapter drives the real website with Playwright
-  and intercepts *reverse-engineered internal endpoints* observed in browser
-  devtools. These change without notice. Each adapter's module docstring
-  lists exactly which endpoints it relies on — expect periodic maintenance,
-  and treat the parser unit tests as canaries.
-- **"Inventory levels" are mostly not a thing publicly.** These platforms
-  almost never expose true unit counts. What you actually get is a boolean
-  in-stock flag, sometimes a scarcity label ("Only 2 left"), and on Blinkit a
-  backend-**capped** integer. The schema records `stock_granularity`
-  (`boolean` / `estimate` / `count`) per row so you always know which kind of
-  signal you're looking at; `stock_estimate` is only populated when the
-  platform gave something beyond a boolean, and is a *hint/lower bound*, not
-  a warehouse count.
-- **Location first, always.** Catalogs, prices, and stock are hyperlocal
-  (per dark store). Every adapter's `set_location(pincode)` must succeed
-  before `search_product()` / `get_inventory()` — the base class enforces it.
-- **Terms of service.** Automated access likely violates these platforms'
-  ToS. Keep rate limits conservative, scrape only what you need, and make
-  your own call on legal/ethical use. Datacenter IPs are commonly blocked;
-  in practice a residential proxy (`browser.proxy` in config) is often
-  required.
-
-## Architecture
-
-The end-to-end flow, as a diagram: **[docs/flowchart.md](docs/flowchart.md)**
-(GitHub renders it inline).
-
-```
-main.py                      # CLI: one sweep = platforms × pincodes × queries (keyword search)
-track_products.py            # CLI: one sweep over targets.xlsx (exact product URLs)
-dashboard.py                 # local web dashboard (stdlib HTTP server + JSON API)
-config.yaml                  # pincodes, queries, platforms, rate limits, retry
-targets.xlsx                 # exact-SKU watchlist: Pincodes + Products sheets
-qc_scraper/
-  schema.py                  # ProductRecord + StockGranularity (normalized output)
-  config.py                  # YAML → typed config
-  storage.py                 # SQLite append-only time series
-  targets.py                 # targets.xlsx loader + per-platform URL → product_id
-  utils/
-    rate_limiter.py          # per-domain min-delay + jitter (shared per run)
-    retry.py                 # exponential backoff (2s/4s/8s…)
-    user_agents.py           # UA rotation (one per browser session)
-  scrapers/
-    base.py                  # BaseScraper ABC: Playwright lifecycle +
-                             #   network-response interception + goto/retry +
-                             #   dump_debug() failure-diagnostics capture
-    parsing.py               # defensive recursive JSON hunting, label parsing
-    blinkit.py … flipkart_minutes.py   # one adapter per platform
-web/index.html                # dashboard frontend (self-contained, no build step)
-scripts/build_targets_template.py   # regenerates targets.xlsx if deleted
-tests/                       # parser fixtures (canaries) + storage/targets roundtrip
-```
-
-**Why interception instead of HTML parsing:** all six sites are JS-rendered
-SPAs whose product data arrives via internal JSON APIs. Listening for those
-responses (`page.on("response")` with per-platform URL regexes) survives UI
-redesigns far better than CSS selectors. The one partial exception is
-Amazon, which is largely server-rendered; its adapter intercepts the
-`/s/query` AJAX endpoint where possible and otherwise falls back to stable
-`data-*` DOM attributes (documented in the adapter).
-
-**Shared adapter interface** (`BaseScraper`):
-
-```python
-await scraper.set_location(pincode)        # required first step
-await scraper.search_product(query)        # -> list[ProductRecord]
-await scraper.get_inventory(product_id)    # -> ProductRecord | None
-```
-
-**Normalized schema** (every platform → same row shape):
-
-```python
-{platform, product_name, brand, price, mrp, discount_pct, quantity_unit,
- in_stock, stock_estimate, stock_granularity, pincode, timestamp,
- product_id, raw_stock_label, search_query}
-```
+Until Phase 2 lands there is no real platform adapter. Everything below runs against the
+built-in fake adapter (`--platforms fake`), which returns fixture data and never touches the
+network.
 
 ## Setup
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install -e .
 playwright install chromium
+cp .env.example .env                                   # optional; only needed for a proxy
 ```
 
-**Windows prerequisite:** Playwright's dependencies (`greenlet`) are
-compiled C extensions and need the **Microsoft Visual C++ Redistributable**
-to load. If `python main.py` fails with `ImportError: DLL load failed while
-importing _greenlet`, install it from
-https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again —
-this isn't a bug in the code, most fresh Windows installs simply don't have
-it yet.
+Python 3.11 or newer.
 
-## Usage
-
-### Excel-driven inputs (recommended)
-
-Open **`inputs.xlsx`** in Excel: the **Products** sheet takes one product
-search term per row, the **Pincodes** sheet one delivery pincode per row
-(the Instructions tab walks through it). When `inputs.xlsx` exists next to
-`main.py` it is used automatically — no need to touch config.yaml for
-products/pincodes. Regenerate a fresh template any time with
-`python scripts/build_inputs_template.py`.
-
-Everything else (platform toggles, rate limits, browser settings) still
-lives in `config.yaml`.
+## Commands
 
 ```bash
-python main.py                       # full sweep, all enabled platforms
-python main.py --platform blinkit    # one platform only
-python main.py --headed -v          # visible browser + debug logs (selector triage)
-python main.py --input other.xlsx    # a different inputs workbook
+python -m qcom template --out input.xlsx               # blank input workbook
+python -m qcom run --input input.xlsx --out output/    # full run
+python -m qcom resume --run-id <id>                    # finish an interrupted run
+python -m qcom smoke --platform fake --pincode 700048 --term "amul butter"
+python -m qcom health --platform fake                  # drift check; exits non-zero on drift
+pytest                                                 # full suite, offline
 ```
 
-### Excel output
+`run` prints a summary with failures at the top and exits 0 on success, 1 when the failure
+rate crossed the threshold or a platform was blocked, 2 on an invalid workbook or config, 3
+when the run had to abort.
 
-Two ways to get results back out as a spreadsheet:
+## Input workbook
 
-- **Dashboard**: the **⬇ Download Excel** button (top right of the filter
-  row) exports exactly what the current filters show.
-- **Command line**: `python export_excel.py` writes
-  `data/export_<timestamp>.xlsx` (filters: `--pincode`, `--query`,
-  `--days N`, output path: `--out file.xlsx`).
+Sheet 1 (`products`): one search term per row in `product_name`. Optional `brand`,
+`pack_size`, `category`, `active`.
+Sheet 2 (`pincodes`): one six-digit pincode per row in `pincode`, kept as text. Optional
+`city`, `state`, `active`.
+Sheet `settings` (optional): `platforms` (comma-separated, blank means all), `max_results_per_query`
+(default 20), `run_label`.
 
-The workbook has two tabs: **Latest snapshot** (most recent observation of
-each product per platform per pincode) and **All observations** (the full
-time series).
+The workbook is validated completely before any browser starts. Every problem is reported
+with its sheet and cell.
 
-Results append to `data/observations.db` (SQLite, WAL). Because every sweep
-*appends* timestamped rows, price/stock history falls out of a simple query:
+## Output workbook
 
-```sql
-SELECT timestamp, price, in_stock, stock_estimate, stock_granularity
-FROM observations
-WHERE platform = 'blinkit' AND product_id = '101' AND pincode = '110001'
-ORDER BY timestamp;
-```
+`output/<run_id>_results.xlsx` with four sheets:
 
-### Dashboard (frontend)
+- `results`: one row per listing, 31 columns (`docs/ARCHITECTURE.md` section 13). Prices are
+  numbers in rupees, pincodes are text, `captured_at_ist` is a real datetime.
+- `run_summary`: one row per platform x pincode x search term with status, attempts, duration,
+  strategy and final error code.
+- `failures`: every job that produced no rows, with its error code, reason, attempt count and
+  a pointer to the stored raw payload or screenshot.
+- `run_meta`: run id, times, code version, git SHA, config hash, input hash, adapter versions,
+  proxy label, counts by status and code, data quality counters, platform stops.
 
-A local web dashboard for browsing the collected data — no extra installs
-needed (Python standard library only):
+The workbook is generated from the SQLite database (`data/qcom.sqlite`), never from memory,
+so `resume` produces exactly what `run` would have.
 
-```bash
-python dashboard.py           # serves data/observations.db and opens the browser
-python dashboard.py --demo    # preview with synthetic data before your first scrape
-```
+## Error codes
 
-It opens `http://127.0.0.1:8000` with: filters (product / pincode / 7-30-90
-days), stat tiles, a "cheapest in-stock price by platform" daily chart, a
-latest-snapshot table (with each row's `stock_granularity` badge), and a
-click-through per-product price history chart. The page lives in
-`web/index.html`; the JSON API in `dashboard.py`.
+| code | meaning | retried |
+|---|---|---|
+| `NETWORK_TIMEOUT` | request or navigation timed out | 3 attempts |
+| `RATE_LIMITED` | 429 or a throttle signal | 2 attempts, then the platform pauses for the run |
+| `BLOCKED` | bot wall, captcha, sustained 403 | no; the platform stops, remaining jobs are `SKIPPED_PLATFORM_BLOCKED` |
+| `PROXY_ERROR` | proxy refused or died | 2 attempts, then the next fallback proxy, else the run aborts |
+| `LOCATION_NOT_SET` | pincode not applied or the readback did not match | 2 attempts with a fresh browser context, then every job at that pincode fails |
+| `NO_RESULTS` | the platform positively returned an empty, well-formed result | not an error |
+| `SCHEMA_DRIFT` | the response is missing a path the spec says is always there | no; the path is named in the reason |
+| `PARSE_ERROR` | the parser crashed | no; raw payload and traceback saved |
+| `UNKNOWN` | anything unclassified | 1 attempt; every `UNKNOWN` is a bug to classify |
 
-### Debugging a broken platform
+Five consecutive failed jobs on one platform trip its circuit breaker; the rest are skipped
+and the other platforms carry on.
 
-Every `set_location()` failure, `search_product()` failure, and every
-search that comes back with **zero results** (which is often a silent
-failure rather than a raised error — the page just didn't do what the code
-assumed) automatically saves a screenshot + the raw JSON the page loaded
-into `./debug/<platform>/`:
+## Debugging a failed run
 
-```
-debug/
-  flipkart_minutes/
-    location_110001_FAILED_20260715-013045.png
-    location_110001_FAILED_20260715-013045.json
-    location_110001_FAILED_20260715-013045.url.txt
-```
+1. Read the summary printed at the end, or `run_meta` in the workbook. Platform stops and the
+   failure rate are at the top.
+2. Open the `failures` sheet. Each row has the error code, the reason, and either capture ids
+   (`captures=<run_id>:000123`) or a screenshot path under `runs/<run_id>/artifacts/`.
+3. The raw payload for a capture id is in the `raw_payloads` table of `data/qcom.sqlite`,
+   compressed with zlib and checksummed. `Storage.capture_body(capture_id)` returns the bytes.
+4. `runs/<run_id>/run.jsonl` has every event with `job_id`, `attempt`, `code` and `strategy`.
+5. `python -m qcom health --platform <p>` tells you whether the platform still looks the way the
+   spec says it does.
 
-This exists because these sites block non-residential IPs, so whoever is
-fixing an adapter often can't reproduce the failure live themselves — the
-screenshot shows exactly what the browser saw, and the `.json` file shows
-every matching API response captured up to that point. Hand these three
-files over instead of re-describing what happened in words.
+## Configuration
 
-### Exact-SKU tracking (targets.xlsx)
+`config.yaml` holds throttle, retry policy, circuit breaker, concurrency and storage paths, and
+is hashed into `run_meta`. Secrets (proxy server and credentials) live in `.env`, which is
+gitignored; `.env.example` documents the keys. Session jars under `sessions/` contain tokens and
+are gitignored too.
 
-Keyword search (`config.yaml`'s `queries`) asks each platform's own search
-ranking to pick a result — which can silently grab the wrong pack size or
-a different brand than you meant. For a fixed watchlist of specific
-products, **`targets.xlsx`** lets you paste the exact product page URL
-instead, so there's no guessing:
+## Adding a platform
 
-```bash
-python track_products.py --headed -v
-```
-
-Open `targets.xlsx` (an Instructions tab explains the process): list your
-pincodes on the **Pincodes** tab, and on the **Products** tab, for each
-product/platform combination, paste the URL of that product's own page
-(open the product on the real site, copy the address bar) plus a `label`
-you choose — use the *same* label for the same product across different
-platforms so the dashboard groups and compares them together, exactly like
-it does for keyword-search queries. Results append to the same
-`data/observations.db`, so `python dashboard.py` shows both keyword-search
-and exact-SKU rows.
-
-If `targets.xlsx` ever gets deleted, regenerate it with
-`python scripts/build_targets_template.py`.
-
-### Scheduling
-
-```cron
-# every 30 min
-*/30 * * * * cd /path/to/quick-commerce-scraper && .venv/bin/python main.py >> scrape.log 2>&1
-```
-
-## Tests
-
-```bash
-pytest
-```
-
-Parser tests run against synthetic payloads shaped like each platform's real
-responses. When an adapter starts returning nothing, the fix loop is: open
-the site in devtools → find the new endpoint/payload shape → update the
-adapter's `API_URL_PATTERNS` / parser → update the fixture.
-
-## Maintenance checklist (when an adapter breaks)
-
-1. Run `python main.py --platform <name> --headed -v` and watch the browser.
-2. If location setting fails: update the selector fallback lists in
-   `set_location()` (UI churn).
-3. If location works but no data: the internal endpoint moved — check
-   devtools' Network tab and update `API_URL_PATTERNS`.
-4. If data arrives but rows are empty/wrong: payload reshaped — update the
-   `parse_*` function and its test fixture.
+Write `qcom/platforms/<name>/adapter.py` implementing the five functions in
+`qcom/platforms/base.py`, capture trimmed fixtures under `tests/fixtures/<name>/`, register the
+class in `qcom/platforms/registry.py`, and make `tests/contract/` green. If that needs a change
+in `qcom/core/`, the abstraction is wrong; say so rather than special-casing.

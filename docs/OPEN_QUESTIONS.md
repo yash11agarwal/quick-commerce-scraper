@@ -1,16 +1,19 @@
-# Open questions, Phase 0
+# Open questions
 
 Everything the requirements, the standing rules or the playbooks leave open, in one place.
-Section A needs your answer before Phase 1 starts. Section B lists inconsistencies I found
-and how I propose to resolve each; say so if you disagree. Section C is the list of gaps that
-can only be closed by looking at the live site; no answer is needed now, it is here so you
-know what Phases 2 and 3 will spend their time on.
+Section A was answered on 1 September 2026; the answers and where each landed are in
+`docs/ARCHITECTURE.md` section 21, and the recommendations below are kept for the record.
+Section B lists inconsistencies found in the requirements and how each was resolved. Section C
+is the list of gaps that can only be closed by looking at the live site; Phases 2 and 3 close
+them platform by platform.
 
-Where I have a recommendation it is stated first.
+Still genuinely open after the answers: A7 (final platform set, "decide later"), A18 (Zepto has
+no confirmed readback carrying the pincode; rule 4 stays strict until Phase 3 looks), and
+whether a proxy will exist at all (A1), which decides whether Swiggy is reachable (B9).
 
 ---
 
-## A. Decisions I need from you
+## A. Decisions (answered 1 September 2026; see ARCHITECTURE.md section 21)
 
 ### A1. Proxy
 Which residential proxy provider, is rotation per request or per session, and how are the

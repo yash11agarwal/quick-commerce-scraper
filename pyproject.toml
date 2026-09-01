@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qcom"
+version = "2.0.0.dev1"
+description = "Pincode-scoped price and availability scraper for Indian quick-commerce platforms"
+requires-python = ">=3.11"
+dependencies = [
+  "playwright>=1.44",
+  "pydantic>=2.5",
+  "typer>=0.12",
+  "tenacity>=8.2",
+  "structlog>=24.1",
+  "openpyxl>=3.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+qcom = "qcom.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["qcom*"]
+
+[tool.setuptools.package-data]
+"qcom.platforms.fake" = ["fixtures/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

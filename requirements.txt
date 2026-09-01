@@ -1,7 +1,11 @@
+# Approved dependency set (see CLAUDE.md). Pin loosely; lock in your own venv.
 playwright>=1.44
-PyYAML>=6.0
+pydantic>=2.5
+typer>=0.12
+tenacity>=8.2
+structlog>=24.1
 openpyxl>=3.1
+pyyaml>=6.0
 
-# Dev / test
+# tests
 pytest>=8.0
-pytest-asyncio>=0.23

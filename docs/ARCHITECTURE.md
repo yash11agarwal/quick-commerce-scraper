@@ -1,9 +1,10 @@
 # V2 architecture
 
-Status: Phase 0 design. No code exists yet. Written 1 September 2026 against the three
-playbooks in `docs/playbooks/`, the requirements in `docs/REQUIREMENTS.md` and the standing
-rules in `CLAUDE.md`. Nothing described here has been run. Anything marked OPEN is a gap the
-playbooks do not close; every OPEN item is collected in `docs/OPEN_QUESTIONS.md`.
+Status: Phase 1 complete (scaffolding, run loop, fake adapter, Excel in and out, tests). Written
+1 September 2026 against the three playbooks in `docs/playbooks/`, the requirements in
+`docs/REQUIREMENTS.md` and the standing rules in `CLAUDE.md`. Section 21 records the owner's
+Phase 0 decisions. Anything marked OPEN is a gap the playbooks do not close; every OPEN item is
+collected in `docs/OPEN_QUESTIONS.md`. No real platform adapter exists yet (Phases 2 and 3).
 
 This document is written for the owner of the project, who is not a programmer. Where a
 choice was mine, the reasons are spelled out and the choice is listed again in section 20 so
@@ -33,7 +34,7 @@ relevant platform specs: never use "text contains the typed pincode" as a sugges
 `input[type=text]` (BigBasket's product search bar accepts a pincode without complaint), and
 a suggestion click that appears to succeed must be followed by a verification.
 
-What happens to the V1 files on this branch is a question for you (`OPEN_QUESTIONS.md`, A6).
+The V1 files were removed from this branch in Phase 1 (decision A6). The main branch keeps V1.
 
 ---
 
@@ -74,7 +75,7 @@ What happens to the V1 files on this branch is a question for you (`OPEN_QUESTIO
 qcom/                          the package; `python -m qcom` runs cli/main.py
   __main__.py
   cli/
-    main.py                    typer app: run, resume, smoke, health. Argument parsing and exit codes only.
+    main.py                    typer app: run, resume, smoke, health, template. Argument parsing and exit codes only.
   core/
     models.py                  pydantic models: Job, ProductListing, RawCapture, EffectiveLocation, HealthReport
     errors.py                  ErrorCode enum and the exception classes that carry it
@@ -86,13 +87,15 @@ qcom/                          the package; `python -m qcom` runs cli/main.py
     throttle.py                per-host rate limiter with jitter, thread-safe
     normalise.py               pack size parsing, unit normalisation, price_per_unit, discount_pct
     matching.py                match_score
-    quality.py                 data quality counters and run-over-run price comparison
+    location.py                suggestion choice and readback check (pincode zone table)
+    quality.py                 rank, de-duplicate, normalise, score, data quality events, price comparison
     summary.py                 run summary, exit status
     clock.py                   IST and UTC timestamps
     logging.py                 structlog JSON configuration
   io/
     excel_in.py                input workbook reader and validator
     excel_out.py               output workbook writer
+    template.py                blank input workbook
   platforms/
     base.py                    the PlatformAdapter protocol; helpers that know no platform
     registry.py                platform name to adapter class
@@ -117,12 +120,14 @@ config.yaml                    versioned, no secrets
 
 Import rules, enforced by a test that reads the import statements of every module:
 
-- `platforms/*` may import from `core.models`, `core.errors`, `core.normalise` and nothing
-  else in `core`, and never from `io` or `cli`.
-- `io/*` may import from `core.models` and `core.errors` only.
-- `cli/*` imports from `core` only.
-- No module outside `platforms/` contains the name of a platform. The one place platform names
-  appear downstream is `platforms/registry.py`, which `core.runner` uses to look adapters up.
+- `platforms/*` may import from `core.models`, `core.errors`, `core.normalise`,
+  `core.location`, `core.clock` and nothing else in `core`, and never from `io` or `cli`.
+- `io/*` may import from `core` (the output writer projects the database) and never from
+  `platforms`.
+- `core/*` never imports from `io` or `cli`.
+- `cli/*` imports from `core` and from `platforms.registry` (the name lookup), nothing else.
+- No module outside `platforms/` contains the name of a platform as a string. The canonical
+  name list lives in `core/models.py`; `platforms/registry.py` maps names to adapters.
 
 A note on the directory name `io`: the Python standard library also has a module called `io`.
 There is no clash because ours is `qcom.io`, a sub-package, and `python -m qcom` never puts
@@ -140,6 +145,8 @@ class PlatformAdapter(Protocol):
     version: str                   # adapter version, written to run_meta
     hosts: tuple[str, ...]         # hosts the throttle keys on
     probe: Probe                   # known-good query for health: pincode, term, expected city
+    needs_browser: bool            # False only for the fake adapter
+    stock_depth: bool              # True when the platform serves an integer stock count
 
     def set_location(self, page: Page, pincode: str, expect: LocationExpectation) -> EffectiveLocation: ...
     def search(self, page: Page, term: str, max_results: int) -> list[RawCapture]: ...
@@ -241,7 +248,8 @@ One row of the `results` sheet before the run-level columns are added. Money in 
 ```
 platform, effective_pincode, result_rank, platform_product_id (str), product_name, brand,
 pack_size (as shown), unit_normalised (str | None), mrp_paise (int | None),
-selling_price_paise (int | None), discount_pct (Decimal | None), price_per_unit_paise (int | None),
+selling_price_paise (int | None), base_selling_price_paise (int | None),
+discount_pct (Decimal | None), price_per_unit_paise (int | None),
 currency ("INR"), in_stock (bool | None), stock_qty (int | None), eta_minutes (int | None),
 store_or_seller_id (str | None), category_path (str | None), product_url (str | None),
 image_url (str | None), match_score (Decimal | None), capture_id, strategy
@@ -259,7 +267,13 @@ tell you (the table is from the BigBasket playbook, section 1):
 | `stock_qty` in V2 | `inventory` | `None` | `availableQuantity` | `None` |
 
 `stock_qty` is `None` for Swiggy and BigBasket on every row, always. It is never zero-filled and
-never inferred from a low-stock string.
+never inferred from a low-stock string. The contract suite enforces this through the adapter's
+`stock_depth` flag.
+
+Three prices, per decision A12 ("get both for all platforms"): `mrp`, `selling_price` (what a
+guest pays: Blinkit `normal_price`, Swiggy `offerPrice`, Zepto `discountedSellingPrice`,
+BigBasket `sp`) and `base_selling_price` (the platform's pre-promotion selling price where one
+exists: Zepto `sellingPrice`, BigBasket `rsp`; `None` on Blinkit; Swiggy OPEN).
 
 ### 5.6 HealthReport
 
@@ -436,8 +450,9 @@ justify.
   `config.yaml` (default 1 everywhere) sets how many browser contexts that platform may run.
   With a value above 1, pincode groups are handed out across that many contexts; a pincode
   group never splits, because the location is a property of the context.
-- The default therefore runs at most four browsers at once, one per platform. If the machine
-  cannot hold four Chromium instances, `concurrency.max_platforms_in_parallel` caps it.
+- `concurrency.max_platforms_in_parallel` caps how many platforms run at once. The default is
+  2, for the 8 GB machine named in decision A4: two Chromium instances at a time, the other two
+  platforms queue behind them.
 
 Why sync rather than async: the playbooks show that three of the four platforms hand over
 their data as plain request and response after a one-time browser bootstrap, and the fourth
@@ -467,6 +482,17 @@ Rule 4 in one table. Full detail is in each spec.
 Every worker asserts before the first search and writes the readback into the job. Each
 platform's known 700048 values are used by `health`, not by `run`, because for any other
 pincode the expected store id is unknown and must not be guessed.
+
+**Picking the right suggestion without a city column** (decision A8). Every playbook found a
+Madhya Pradesh decoy in the autocomplete for 700048. `core/location.py` resolves this without
+user input: the first two digits of an Indian pincode identify the postal zone, and a bundled
+zone table maps that to the state or states it can be in. A suggestion that names a state the
+pincode cannot be in is rejected; among the rest, one naming the expected city (if given) wins,
+then one naming an expected state, then the first. More than one survivor is logged as
+ambiguous, and the readback is the final arbiter: an address naming a wrong state is
+`LOCATION_NOT_SET`, and the rejected suggestion text is fed back as an exclusion so the retry
+picks the next candidate. The `city` and `state` columns in the pincodes sheet are optional and
+only make this stricter. The table never produces an output value.
 
 ---
 
@@ -530,30 +556,37 @@ cookies are not a problem.
 
 ### Input (`input.xlsx`)
 
-Validated in full, before any browser, by `io/excel_in.py`. The validator produces a list of
-problems, each with sheet, cell and message, and the run aborts with exit code 2 if the list
-is non-empty. Checks:
+Per decision A1: sheet 1 holds product names, sheet 2 holds pincodes. Sheets are found by name
+(`products`, `pincodes`, `settings`, case-insensitive prefix) and otherwise by position, so a
+workbook with default sheet names works. `python -m qcom template` writes a blank one.
 
-- sheets `products`, `pincodes`, `settings` exist (case-sensitive)
-- `products` header row is exactly `product_name, brand, pack_size, category, active` in
-  that order; `pincodes` is `pincode, city, active`; `settings` is `key, value`
+Validated in full, before any browser, by `io/excel_in.py`. The validator collects every
+problem, each with sheet, cell and message, and the run aborts with exit code 2 if there is
+one. Checks:
+
+- sheet 1 has a header cell `product_name` (aliases accepted: product, name, search_term,
+  query); optional `brand`, `pack_size`, `category`, `active`
+- sheet 2 has a header cell `pincode` (aliases: pin, pin code, postal code); optional `city`,
+  `state`, `active`
 - `product_name` non-blank on every active row; `pincode` non-blank, exactly six digits after
-  reading as text (a numeric cell 700048 is accepted and converted; `700048.0`, `70004`,
-  `7000481`, `70004A` are rejected, never coerced)
+  reading as text (a numeric cell 700048 is accepted; `700048.5`, `70004`, `7000481`, `70004A`
+  are rejected, never coerced). A row that is entirely blank is skipped.
 - `active` is blank, TRUE or FALSE (case-insensitive text or boolean cell); blank means TRUE
 - no duplicate active `product_name` (case-insensitive, whitespace-trimmed); no duplicate
   active `pincode`
-- `settings.platforms` blank or a comma-separated subset of the registry;
-  `max_results_per_query` blank or a positive integer (default 20); `run_label` free text
-- at least one active product, one active pincode, one selected platform
+- `settings` sheet is optional: `platforms` blank (every implemented platform) or a
+  comma-separated list, validated at planning time; `max_results_per_query` blank or a positive
+  integer (default 20); `run_label` free text. `--platforms`, `--max-results` and `--label` on
+  the command line override the sheet.
+- at least one active product and one active pincode
 
 ### Output (`output/<run_id>_results.xlsx`)
 
 Four sheets, exactly as the requirements list them. `results` has the 29 columns of
-requirements section 3 in that order, plus `strategy` as a 30th column (requirements section 6
-demands it and section 3 omits it; see `OPEN_QUESTIONS.md` B1). `run_summary` has one row per
-job. `failures` has one row per job that produced no listings, including `NO_RESULTS` jobs
-marked as such. `run_meta` is key/value.
+requirements section 3 in that order, plus `base_selling_price` after `selling_price`
+(decision A12) and `strategy` last (requirements section 6 demands it; B1), 31 in all.
+`run_summary` has one row per job. `failures` has one row per job that produced no listings,
+including `NO_RESULTS` jobs marked as such. `run_meta` is key/value.
 
 Formatting: pincode columns as text (`@` number format), price columns as numbers with
 `0.00`, `captured_at_ist` as a real datetime cell, `captured_at_utc` as ISO text, header row
@@ -696,7 +729,7 @@ retry:                             # the policy table; edit here, not in code
 circuit_breaker:
   consecutive_failures: 5
 concurrency:
-  max_platforms_in_parallel: 4
+  max_platforms_in_parallel: 2     # 8 GB machine
   blinkit: 1
   swiggy_instamart: 1
   zepto: 1
@@ -721,9 +754,8 @@ QCOM_PROXY_PASSWORD=dummy
 ```
 
 Dependencies: `playwright`, `pydantic`, `typer`, `tenacity`, `structlog`, `openpyxl`, `pytest`,
-plus `pyyaml` for `config.yaml` (V1 already uses it; it is the only way to read YAML without
-writing a parser, and it is not on the approved list, so it is question A14). No HTTP client
-library: replays use Playwright's own request context.
+plus `pyyaml` for `config.yaml` (decision A14). No HTTP client library: replays use
+Playwright's own request context. `pyproject.toml` pins them; `pip install -e .` installs.
 
 ---
 
@@ -739,9 +771,39 @@ cheap.
 5. `strategy` added as the 30th `results` column (section 13, question B1).
 6. `price_per_unit` per kg, per L, per piece (section 14, question A13).
 7. Session jars persisted on disk and reused after re-verification (section 11, question A16).
-8. Default concurrency: all platforms in parallel, one context each (section 8, question A4).
+8. Default concurrency: two platforms at a time, one context each (section 8, decision A4).
 9. Exit non-zero above a 20% job failure rate or on any `BLOCKED` (section 19, question A17).
 10. Swiggy: one listing row per variation, not per product (spec, question A10).
 11. Zepto: `discountedSellingPrice` as `selling_price` (spec, question A12).
 12. BigBasket: `desc` and `brand.name` concatenated as `product_name` is **not** done; `product_name` is `desc` and `brand` is separate (spec).
 13. Blinkit `store_or_seller_id` is the row's own `merchant_id`, so voucher rows show 35940 rather than being filtered out (spec).
+
+---
+
+## 21. Decisions recorded 1 September 2026
+
+The owner's answers to `OPEN_QUESTIONS.md` section A, and how each landed in the code.
+
+| question | answer | where it landed |
+|---|---|---|
+| A1 proxy | none named; "figure it out" | optional, from `.env`; no proxy by default; a wall is `BLOCKED` and reported |
+| A1 input | sheet 1 products, sheet 2 pincodes | `io/excel_in.py` finds sheets by name then position; `settings` optional |
+| A2 accounts | all guest | no credential handling for platforms |
+| A3 scale | 20 products x 10 pincodes x 4 platforms | 800 jobs per run; throttle defaults kept |
+| A4 machine | Intel i5, 8 GB | `max_platforms_in_parallel: 2` |
+| A5 history | keep | every run stays in SQLite; no prune command yet |
+| A6 V1 | start afresh from the playbooks | V1 files removed from this branch |
+| A7 platforms | decide later | the four with playbooks; nothing else |
+| A8 city column | "use your judgement" | optional; zone-table guard plus readback (section 9) |
+| A9 strategy column | "get both" read as: keep it | column 31 |
+| A10 Swiggy rows | "use your judgement" | one row per variation |
+| A11 Swiggy stock | "use your judgement" | `stock_qty` always `None` on Swiggy |
+| A12 prices | "get both for all platforms" | `selling_price` plus `base_selling_price` on every row |
+| A13 per-unit basis | "use your judgement" | per kg, per L, per piece |
+| A14 YAML | "use your judgement" | `pyyaml` |
+| A15 pagination | more than the first page from day 1 | in scope for each platform's phase; `max_results` drives page count |
+| A16 session jars | "use your judgement" | kept, gitignored, re-verified on every use |
+| A17 exit threshold | "use your judgement" | 20% |
+| A18 Zepto readback | "I don't know" | rule 4 stays strict; Phase 3 looks for the pincode live and reports back |
+| A19 reparse command | "use your judgement" | Phase 4 |
+| A20 health probe | "use your judgement" | 700048 / Mango, matching the playbooks |

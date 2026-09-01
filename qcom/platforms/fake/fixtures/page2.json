@@ -1,0 +1,11 @@
+{
+  "platform": "fake",
+  "store": {"id": "FAKE-STORE-{pincode}", "eta_minutes": 12, "pincode": "{pincode}"},
+  "page": 2,
+  "total_pages": 2,
+  "products": [
+    {"id": "F006", "name": "{term} Cooking Pack", "brand": "Britannia", "pack": "200 g", "mrp": "120.00", "price": "110.00", "base_price": null, "stock": 7, "category": "Dairy > Butter", "url": "https://fake.example/p/F006", "image": "https://fake.example/i/F006.jpg"},
+    {"id": "F001", "name": "{term} Classic", "brand": "Amul", "pack": "500 g", "mrp": "305.00", "price": "275.00", "base_price": "290.00", "stock": 5, "category": "Dairy > Butter", "url": "https://fake.example/p/F001", "image": "https://fake.example/i/F001.jpg"},
+    {"id": "F007", "name": "{term} Ghee", "brand": "Amul", "pack": "1 L", "mrp": "650.00", "price": "615.00", "base_price": null, "stock": 3, "category": "Dairy > Ghee", "url": "https://fake.example/p/F007", "image": "https://fake.example/i/F007.jpg"}
+  ]
+}
